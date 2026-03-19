@@ -28,11 +28,24 @@ TOKEN="smoke-token"
 DATA_DIR="$(mktemp -d "${TMPDIR:-/tmp}/knit-smoke.XXXXXX")"
 LOG_FILE="$DATA_DIR/daemon.log"
 CONFIG_PATH="$DATA_DIR/knit.toml"
+FAKE_ADAPTER="$DATA_DIR/fake-cli-adapter.sh"
 ENCRYPTION_KEY_B64="$(python3 - <<'PY'
 import base64
 print(base64.b64encode(b"\x11" * 32).decode())
 PY
 )"
+
+cat >"$FAKE_ADAPTER" <<'EOF'
+#!/usr/bin/env sh
+set -eu
+payload="$(cat)"
+if [ -n "${KNIT_CLI_LOG_FILE:-}" ]; then
+  printf '%s\n' "runtime-smoke adapter accepted payload" >>"$KNIT_CLI_LOG_FILE"
+  printf '%s\n' "$payload" >>"$KNIT_CLI_LOG_FILE"
+fi
+printf '{"run_id":"runtime-smoke-cli","status":"accepted","ref":"runtime-smoke.log"}\n'
+EOF
+chmod +x "$FAKE_ADAPTER"
 
 cleanup() {
   if [[ -n "${daemon_pid:-}" ]]; then
@@ -49,6 +62,7 @@ KNIT_DATA_DIR="$DATA_DIR" \
 KNIT_SQLITE_PATH="$DATA_DIR/knit.db" \
 KNIT_CONFIG_PATH="$CONFIG_PATH" \
 KNIT_ENCRYPTION_KEY_B64="$ENCRYPTION_KEY_B64" \
+KNIT_CLI_ADAPTER_CMD="$FAKE_ADAPTER" \
 "$DAEMON_BIN" >"$LOG_FILE" 2>&1 &
 daemon_pid=$!
 
