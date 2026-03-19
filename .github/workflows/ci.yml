@@ -146,7 +146,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: build-dist
-          path: .
+          path: dist-ci/
       - name: Download SBOM
         uses: actions/download-artifact@v4
         with:

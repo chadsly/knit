@@ -95,6 +95,8 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 		"vulnerability-scan:",
 		"release-signature-verify:",
 		"actions/setup-node@",
+		"name: build-dist",
+		"path: dist-ci/",
 		"version=\"0.0.0-ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}\"",
 		"version=\"${GITHUB_REF_NAME#v}\"",
 	}
