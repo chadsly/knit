@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://knit.local/schemas/canonical-feedback.v1.json",
+  "title": "Canonical Feedback Package v1",
+  "type": "object",
+  "required": ["session_id", "session_meta", "change_requests", "generated_at"],
+  "properties": {
+    "session_id": { "type": "string" },
+    "summary": { "type": "string" },
+    "session_meta": {
+      "type": "object",
+      "required": ["target_window"],
+      "properties": {
+        "profile": { "type": "string" },
+        "target_window": { "type": "string" },
+        "target_url": { "type": "string" },
+        "environment": { "type": "string" },
+        "build_id": { "type": "string" }
+      }
+    },
+    "change_requests": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "required": ["event_id", "summary", "category", "priority"],
+        "properties": {
+          "event_id": { "type": "string" },
+          "summary": { "type": "string" },
+          "category": { "type": "string" },
+          "priority": { "type": "string" },
+          "assumptions": { "type": "array", "items": { "type": "string" } },
+          "ambiguities": { "type": "array", "items": { "type": "string" } },
+          "affected_area": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "artifacts": {
+      "type": ["array", "null"],
+      "items": {
+        "type": "object",
+        "required": ["kind", "ref"],
+        "properties": {
+          "kind": { "type": "string" },
+          "ref": { "type": "string" }
+        }
+      }
+    },
+    "generated_at": { "type": "string", "format": "date-time" }
+  }
+}

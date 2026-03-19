@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Knit</title>
+  <style>
+    :root {
+      --bg: #f6f0e8;
+      --card: #fffaf5;
+      --ink: #1f2a2a;
+      --muted: #6a6f6b;
+      --line: #d8cfc4;
+      --accent: #0e766e;
+      --danger: #b94b4b;
+    }
+    body {
+      margin: 0;
+      min-width: 320px;
+      font: 13px/1.45 "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at top, #fff7ef, var(--bg));
+    }
+    main {
+      padding: 10px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      margin-bottom: 8px;
+      box-shadow: 0 10px 24px rgba(73, 52, 32, 0.06);
+    }
+    h2, p {
+      margin: 0;
+    }
+    h2 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .helper {
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+    }
+    input,
+    button {
+      font: inherit;
+      border-radius: 10px;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      background: white;
+      margin-top: 6px;
+    }
+    .row {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .row.two-up {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    button {
+      border: 1px solid transparent;
+      padding: 8px 10px;
+      background: #e8ebe7;
+      color: var(--ink);
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    }
+    button.primary {
+      background: var(--accent);
+      color: white;
+    }
+    button.danger {
+      background: #f7d6d6;
+      color: var(--danger);
+    }
+    button:hover {
+      border-color: rgba(14, 118, 110, 0.25);
+      transform: translateY(-1px);
+    }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      transform: none;
+      border-color: transparent;
+    }
+    .notice {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(14, 118, 110, 0.18);
+      background: rgba(14, 118, 110, 0.08);
+      color: var(--accent);
+      white-space: pre-wrap;
+    }
+    .status {
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .status.error {
+      color: var(--danger);
+    }
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="pairingCard" class="card">
+      <h2>Pair With Local Daemon</h2>
+      <p class="helper">Enter the one-time code from the main Knit UI. After pairing, the full browser composer lives in the side panel.</p>
+      <label>Daemon URL
+        <input id="daemonBaseURL" placeholder="http://127.0.0.1:7777" />
+      </label>
+      <label>Pairing code from Knit
+        <input id="pairingCode" placeholder="AB12CD34" maxlength="16" />
+      </label>
+      <div class="row">
+        <button id="pairBtn" class="primary">Pair extension</button>
+      </div>
+    </section>
+
+    <section id="launcherCard" class="card hidden">
+      <h2>Browser Composer</h2>
+      <p class="helper">Capture, preview, and submit from the extension side panel after pairing.</p>
+      <div class="row two-up">
+        <button id="openComposerBtn" class="primary">Open browser composer</button>
+        <button id="unlinkBtn" class="danger">Unpair</button>
+      </div>
+      <div id="submitNotice" class="notice hidden" aria-live="polite"></div>
+    </section>
+
+    <section class="card">
+      <h2>Status</h2>
+      <div id="status" class="status">Enter the pairing code from the main Knit UI to connect this browser.</div>
+    </section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

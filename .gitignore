@@ -1,0 +1,42 @@
+# Local runtime state and captured artifacts
+/.knit/
+/.lumobarkley/
+
+# Release and packaging outputs
+/dist/
+/dist-*/
+/dist-ci/
+
+# Temporary local probes and logs
+/.codex_write_probe
+/.codex_write_probe_attempt
+/.codex_write_test
+/coverage.out
+/cover.out
+/coverage.txt
+/*.log
+
+# Go test/build leftovers
+/*.test
+
+# Editor and OS noise
+.DS_Store
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# Local fixtures and accidental runtime state under source paths
+/internal/server/.lumobarkley/
+/internal/server/knit.db
+/internal/server/knit.toml
+
+# Coding agent stuff
+REQUIREMENTS.md
+AGENTS.md
+/docs/CHROME_WEB_STORE_LISTING.md
+/docs/MVP_DECISIONS.md
+/test/requirements_tracker_test.go
+
+# Old
+README copy.md

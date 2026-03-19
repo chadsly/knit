@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[reliability-gate] running workflow-critical tests"
+go test ./internal/server -run 'TestE2EWorkflowCaptureToSubmission|TestE2EWorkflowSeriesQueueMultiSubmit|TestE2EWorkflowOfflineDeferredSubmissionResume|TestSubmissionQueueSeriesProcessesInOrder|TestSubmissionQueueParallelDefersPostSubmitUntilDrain|TestSubmissionOfflineDeferredRetriesAndEventuallySubmits|TestSubmitQueueRecoveryLoadsQueuedJobsAfterRestart|TestSubmitQueueRecoveryHonorsDeferredUntil|TestFeedbackClipPersistsVideoMetadataAndLatency|TestStateLatencyMetricsIncludePointerAndFeedbackNote|TestRuntimeTranscriptionConfigEndpointSwitchesProvider|TestRuntimeTranscriptionHealthEndpoint|TestVoiceCommandSubmitFeedbackQueuesAttempt|TestVoiceCommandDiscardLastNoteViaFeedbackEndpoint|TestDiscardLastFeedbackEndpoint' -count=1
+
+echo "[reliability-gate] running race detector on critical packages"
+go test -race ./internal/server ./internal/transcription ./internal/companion
+
+echo "[reliability-gate] passed"

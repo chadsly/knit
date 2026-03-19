@@ -1,0 +1,210 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: -mod=readonly
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Run Go test suite
+        run: go test ./...
+
+  workflow-reliability-gate:
+    name: Workflow Reliability Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Run reliability gate
+        run: ./scripts/reliability-gate.sh
+
+  performance-gate:
+    name: Performance Gate
+    runs-on: ubuntu-latest
+    env:
+      KNIT_PERF_OUT_DIR: ./dist-ci/perf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Run performance gate
+        run: ./scripts/perf-gate.sh
+      - name: Upload performance reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-gate
+          path: dist-ci/perf/
+
+  build-matrix:
+    name: Build Matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Derive build version
+        id: vars
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="${GITHUB_SHA::7}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build cross-platform binaries
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: ./scripts/build-cross-platform.sh ./dist-ci
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-dist
+          path: dist-ci/
+
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Generate SBOM
+        run: ./scripts/generate-sbom.sh ./dist-ci/sbom.spdx.json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-dist
+          path: dist-ci/sbom.spdx.json
+
+  vulnerability-scan:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    needs:
+      - unit-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Run dependency scan
+        run: ./scripts/dependency-scan.sh ./dist-ci/dependency-scan.json
+      - name: Upload dependency scan report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-dist
+          path: dist-ci/dependency-scan.json
+
+  package-release:
+    name: Package Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-matrix
+      - sbom
+      - vulnerability-scan
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-dist
+          path: .
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-dist
+          path: dist-ci/
+      - name: Download dependency scan report
+        uses: actions/download-artifact@v4
+        with:
+          name: dependency-scan-dist
+          path: dist-ci/
+      - name: Derive release version
+        id: vars
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="${GITHUB_SHA::7}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Materialize signing keys
+        if: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY != '' }}
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+          PUBLIC_KEY: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
+        run: |
+          private_key_path="$RUNNER_TEMP/release-private.pem"
+          printf '%s\n' "$PRIVATE_KEY" > "$private_key_path"
+          chmod 600 "$private_key_path"
+          echo "RELEASE_SIGNING_PRIVATE_KEY=$private_key_path" >> "$GITHUB_ENV"
+          if [[ -n "${PUBLIC_KEY}" ]]; then
+            public_key_path="$RUNNER_TEMP/release-public.pem"
+            printf '%s\n' "$PUBLIC_KEY" > "$public_key_path"
+            chmod 600 "$public_key_path"
+            echo "RELEASE_SIGNING_PUBLIC_KEY=$public_key_path" >> "$GITHUB_ENV"
+          fi
+      - name: Package release artifacts
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: ./scripts/package-release.sh ./dist-ci
+      - name: Upload packaged release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: packaged-release
+          path: dist-ci/packages/
+
+  release-signature-verify:
+    name: Release Signature Verify
+    runs-on: ubuntu-latest
+    needs:
+      - package-release
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download packaged release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: packaged-release
+          path: dist-ci/packages/
+      - name: Materialize public key
+        if: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY != '' }}
+        shell: bash
+        env:
+          PUBLIC_KEY: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
+        run: |
+          public_key_path="$RUNNER_TEMP/release-public.pem"
+          printf '%s\n' "$PUBLIC_KEY" > "$public_key_path"
+          chmod 600 "$public_key_path"
+          echo "RELEASE_SIGNING_PUBLIC_KEY=$public_key_path" >> "$GITHUB_ENV"
+      - name: Verify release readiness
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            export CI_COMMIT_TAG="${GITHUB_REF_NAME}"
+          fi
+          ./scripts/release-readiness-check.sh ./dist-ci/packages

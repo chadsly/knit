@@ -1,0 +1,19 @@
+{
+  "name": "@knit/daemon",
+  "version": "__VERSION__",
+  "description": "Install and run the local Knit daemon from packaged release artifacts.",
+  "license": "UNLICENSED",
+  "private": false,
+  "bin": {
+    "knit-daemon": "bin/knit-daemon.js"
+  },
+  "scripts": {
+    "postinstall": "node ./lib/install.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "artifacts/",
+    "README.md"
+  ]
+}

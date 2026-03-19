@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Knit Docs</title>
+  <style>
+    :root {
+      --bg: #0f1a29;
+      --card: #132233;
+      --ink: #edf4fb;
+      --muted: #afc0d2;
+      --line: #28405c;
+      --accent: #66ddcd;
+      --accent-strong: #2ea69a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 16px/1.6 "Avenir Next", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(102, 221, 205, 0.16), transparent 28%),
+        linear-gradient(180deg, #102033, var(--bg));
+      color: var(--ink);
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 56px 20px 72px;
+    }
+    .hero {
+      display: grid;
+      gap: 18px;
+      margin-bottom: 28px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    h1, h2, p { margin: 0; }
+    h1 {
+      font-size: clamp(2.3rem, 5vw, 3.8rem);
+      line-height: 1.05;
+      max-width: 12ch;
+    }
+    .lede {
+      max-width: 60ch;
+      color: var(--muted);
+      font-size: 1.1rem;
+    }
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      margin-top: 22px;
+    }
+    .card {
+      background: rgba(19, 34, 51, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 22px;
+      box-shadow: 0 24px 48px rgba(5, 16, 29, 0.35);
+    }
+    h2 {
+      font-size: 1.2rem;
+      margin-bottom: 8px;
+    }
+    .card p {
+      color: var(--muted);
+      min-height: 4.8em;
+    }
+    a.button,
+    a.inline {
+      color: inherit;
+      text-decoration: none;
+    }
+    a.button {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 11px 15px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+      color: #0e1a29;
+      font-weight: 700;
+    }
+    a.inline {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .footer {
+      margin-top: 26px;
+      color: var(--muted);
+      font-size: 0.96rem;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="eyebrow">Knit</div>
+      <h1>Docs and privacy pages for the browser companion</h1>
+      <p class="lede">This lightweight docs site is designed to be published directly from the repository’s <code>docs/</code> folder with GitHub Pages. It gives the Chrome Web Store a stable privacy policy URL and exposes the key setup docs in one place.</p>
+    </section>
+
+    <section class="grid" aria-label="Documentation links">
+      <article class="card">
+        <h2>Privacy Policy</h2>
+        <p>Public policy page for the Chrome Web Store listing. Use this URL in the extension’s privacy policy field once GitHub Pages is enabled.</p>
+        <a class="button" href="./privacy-policy/">Open privacy policy</a>
+      </article>
+
+      <article class="card">
+        <h2>Getting Started</h2>
+        <p>Local daemon, tray, browser extension pairing, and capture workflow guidance for operators using Knit day to day.</p>
+        <a class="button" href="./GETTING_STARTED.md">Open getting started guide</a>
+      </article>
+
+      <article class="card">
+        <h2>Architecture</h2>
+        <p>System boundaries, service layout, and the main UI and extension interaction model for the current implementation.</p>
+        <a class="button" href="./ARCHITECTURE.md">Open architecture guide</a>
+      </article>
+    </section>
+
+    <p class="footer">If you are publishing this repository with GitHub Pages, the privacy policy URL will typically look like <span class="inline">https://YOUR-USER.github.io/YOUR-REPO/privacy-policy/</span>.</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Knit Browser Composer Privacy Policy</title>
+  <meta name="description" content="Privacy Policy for the Knit Browser Composer Chrome extension." />
+  <style>
+    :root {
+      --bg: #f5efe7;
+      --card: #fffaf5;
+      --ink: #1c2731;
+      --muted: #5f6d7b;
+      --line: #dccfbe;
+      --accent: #0e766e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 16px/1.7 "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(14, 118, 110, 0.12), transparent 24%),
+        linear-gradient(180deg, #fff8f1, var(--bg));
+    }
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 54px 20px 72px;
+    }
+    .shell {
+      background: rgba(255, 250, 245, 0.94);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      padding: 28px;
+      box-shadow: 0 26px 56px rgba(84, 61, 34, 0.12);
+    }
+    .eyebrow {
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    h1, h2, p, ul { margin: 0; }
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 1.05;
+      margin-bottom: 10px;
+    }
+    .meta {
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    section + section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+    }
+    h2 {
+      font-size: 1.2rem;
+      margin-bottom: 10px;
+    }
+    p, li {
+      color: var(--ink);
+    }
+    ul {
+      padding-left: 20px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <article class="shell">
+      <div class="eyebrow">Knit</div>
+      <h1>Privacy Policy For Knit Browser Composer</h1>
+      <p class="meta">Last updated: 2026-03-18</p>
+
+      <section>
+        <h2>Summary</h2>
+        <p>The Knit Browser Composer Chrome extension is designed for explicit, user-driven capture. It only collects page data, notes, snapshots, audio, or tab video when the user actively opens the extension and chooses a capture action.</p>
+        <p style="margin-top:10px;">The extension connects only to a user-configured local Knit daemon on <code>http://127.0.0.1</code> or <code>http://localhost</code>. It does not include third-party advertising, analytics, or background browsing-history collection.</p>
+      </section>
+
+      <section>
+        <h2>What The Extension Collects</h2>
+        <ul>
+          <li>the configured local daemon URL</li>
+          <li>a browser token issued by the local daemon after pairing</li>
+          <li>the current tab URL and page title</li>
+          <li>the current text selection on the page</li>
+          <li>limited focused-element context from the active page, such as element label, role, and a short text preview</li>
+          <li>typed notes entered into the side panel</li>
+          <li>page snapshots captured when the user clicks the snapshot button</li>
+          <li>microphone audio captured when the user clicks the microphone button</li>
+          <li>current-tab video and microphone audio captured when the user clicks the tab video button</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>How The Extension Uses Data</h2>
+        <p>The extension uses collected data only to provide the user-facing capture workflow: pair the browser with the local daemon, show the browser composer in the Chrome side panel, prepare browser-grounded request previews, and send notes, snapshots, audio, and tab video to the local Knit daemon at the user's request.</p>
+        <p style="margin-top:10px;">The extension does not use collected data for advertising, profiling, creditworthiness decisions, or sale to third parties.</p>
+      </section>
+
+      <section>
+        <h2>Where Data Goes</h2>
+        <p>The extension sends captured data to the local Knit daemon configured by the user. The extension itself is limited to <code>http://127.0.0.1/*</code> and <code>http://localhost/*</code>.</p>
+        <p style="margin-top:10px;">The extension does not directly transmit data to third-party analytics or advertising services. If the local daemon is configured to send submitted material to other systems or AI providers, that downstream processing is controlled by the daemon environment, not by the extension alone.</p>
+      </section>
+
+      <section>
+        <h2>Data Retention</h2>
+        <p>The extension stores a small amount of local state in Chrome extension storage, including the daemon URL, paired browser token, tab-binding state, and temporary queued snapshot state. Submitted requests are handled by the local Knit daemon, and retention of those requests is controlled by the daemon and its operator configuration.</p>
+      </section>
+
+      <section>
+        <h2>User Control</h2>
+        <p>Users control when data is collected:</p>
+        <ul>
+          <li>no snapshot is captured until the user clicks the snapshot button</li>
+          <li>no microphone audio is captured until the user clicks the microphone button</li>
+          <li>no tab video is captured until the user clicks the tab video button</li>
+          <li>users can clear a session from the side panel</li>
+          <li>users can remove queued preview items before submitting them</li>
+          <li>users can unpair the browser extension from the local daemon</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Data Sharing</h2>
+        <p>The extension does not sell user data. It does not share user data with advertisers. It shares captured data only with the user-configured local daemon needed to deliver the extension's core functionality.</p>
+      </section>
+
+      <section>
+        <h2>Security</h2>
+        <p>The extension stores its local settings using Chrome extension storage and authenticates to the local daemon with the paired browser token issued by that daemon. Because the extension can capture page context and optional media, users should pair it only with a daemon they trust and should review the page they are capturing before submitting.</p>
+      </section>
+
+      <section>
+        <h2>Contact</h2>
+        <p>For support or privacy questions, use the publisher contact email listed in the Chrome Web Store listing or the support address provided by the Knit deployment operator.</p>
+        <p style="margin-top:10px;"><a href="../">Back to docs home</a></p>
+      </section>
+    </article>
+  </main>
+</body>
+</html>

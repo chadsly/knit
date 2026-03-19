@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Knit Browser Composer</title>
+  <style>
+    :root {
+      --bg: #f6f0e8;
+      --card: #fffaf5;
+      --ink: #1f2a2a;
+      --muted: #6a6f6b;
+      --line: #d8cfc4;
+      --accent: #0e766e;
+      --danger: #b94b4b;
+      --surface: #fffaf5;
+      --surface-strong: #ffffff;
+      --surface-soft: #f4efe7;
+      --shadow: 0 10px 24px rgba(73, 52, 32, 0.06);
+      --tooltip-bg: rgba(31, 42, 42, 0.94);
+      --tooltip-text: #fffaf5;
+      --overlay: linear-gradient(180deg, rgba(255, 250, 245, 0.92), rgba(244, 239, 231, 0.96));
+    }
+    html[data-theme="dark"] {
+      --bg: #0f1722;
+      --card: rgba(18, 28, 42, 0.94);
+      --ink: #eef4fb;
+      --muted: #aab7ca;
+      --line: rgba(157, 178, 205, 0.28);
+      --accent: #62c6bc;
+      --danger: #ff8f8f;
+      --surface: #132033;
+      --surface-strong: #172437;
+      --surface-soft: #0c1623;
+      --shadow: 0 22px 50px rgba(3, 8, 15, 0.42);
+      --tooltip-bg: rgba(7, 12, 19, 0.96);
+      --tooltip-text: #eef4fb;
+      --overlay: linear-gradient(180deg, rgba(15, 23, 34, 0.92), rgba(12, 22, 35, 0.96));
+    }
+    body {
+      margin: 0;
+      min-width: 360px;
+      font: 14px/1.5 "Avenir Next", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at top, rgba(255, 247, 239, 0.72), var(--bg));
+    }
+    html[data-theme="dark"] body {
+      background: radial-gradient(circle at top, rgba(98, 198, 188, 0.12), var(--bg));
+    }
+    main {
+      padding: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .header {
+      display: grid;
+      gap: 12px;
+    }
+    .header-copy {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .header-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .header-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .header-mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      flex: 0 0 auto;
+      display: block;
+      box-shadow: var(--shadow);
+    }
+    .header-status-row {
+      display: flex;
+      justify-content: flex-start;
+    }
+    h1,
+    p {
+      margin: 0;
+    }
+    h1 {
+      font-size: 1.15rem;
+      margin-bottom: 4px;
+    }
+    .helper {
+      color: var(--muted);
+    }
+    .session-pill {
+      flex: 0 0 auto;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(14, 118, 110, 0.18);
+      background: rgba(14, 118, 110, 0.08);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .session-pill.idle {
+      border-color: var(--line);
+      background: color-mix(in srgb, var(--surface-strong) 85%, transparent);
+      color: var(--muted);
+    }
+    .row {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .row.two-up {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .row.four-up {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .row.action-row {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    button,
+    textarea {
+      font: inherit;
+      border-radius: 12px;
+    }
+    button {
+      border: 1px solid transparent;
+      padding: 10px 12px;
+      cursor: pointer;
+      background: color-mix(in srgb, var(--surface-soft) 86%, transparent);
+      color: var(--ink);
+      transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    }
+    button:hover {
+      border-color: rgba(14, 118, 110, 0.25);
+      transform: translateY(-1px);
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+      border-color: transparent;
+    }
+    .icon-button {
+      width: 100%;
+      min-height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      aspect-ratio: 1.1 / 1;
+    }
+    .row.action-row .icon-button {
+      min-height: 44px;
+      aspect-ratio: auto;
+    }
+    .icon-button.active {
+      background: var(--accent);
+      color: white;
+      border-color: rgba(14, 118, 110, 0.35);
+    }
+    .theme-toggle {
+      width: 2.65rem;
+      height: 2.65rem;
+      padding: 0;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      flex: 0 0 auto;
+      background: var(--surface-strong);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    .icon-button svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 1.9;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .tooltip-wrap {
+      position: relative;
+      display: block;
+      width: 100%;
+    }
+    .tooltip-wrap::before,
+    .tooltip-wrap::after {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .15s ease, transform .15s ease;
+      position: absolute;
+      left: 50%;
+      z-index: 4;
+    }
+    .tooltip-wrap::before {
+      content: "";
+      bottom: calc(100% + 2px);
+      transform: translateX(-50%) translateY(4px);
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid rgba(31, 42, 42, 0.9);
+    }
+    .tooltip-wrap::after {
+      content: attr(data-tooltip);
+      bottom: calc(100% + 8px);
+      transform: translateX(-50%) translateY(4px);
+      min-width: 148px;
+      max-width: 220px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: var(--tooltip-bg);
+      color: var(--tooltip-text);
+      font-size: 12px;
+      line-height: 1.35;
+      text-align: center;
+      box-shadow: 0 8px 18px rgba(31, 42, 42, 0.18);
+      white-space: normal;
+    }
+    .tooltip-wrap:hover::before,
+    .tooltip-wrap:hover::after,
+    .tooltip-wrap:focus-within::before,
+    .tooltip-wrap:focus-within::after {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .tooltip-wrap[data-tooltip=""]::before,
+    .tooltip-wrap[data-tooltip=""]::after {
+      display: none;
+    }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      min-height: 86px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      margin-top: 10px;
+      background: var(--surface-strong);
+      color: var(--ink);
+    }
+    .field-label {
+      display: block;
+      margin-top: 10px;
+    }
+    .capture-state {
+      margin-top: 12px;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .capture-state.ready {
+      color: var(--accent);
+    }
+    .status {
+      margin-top: 10px;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .status.error {
+      color: var(--danger);
+    }
+    .activity-state {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(14, 118, 110, 0.14);
+      background: rgba(14, 118, 110, 0.06);
+    }
+    .notice {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(14, 118, 110, 0.18);
+      background: rgba(14, 118, 110, 0.08);
+      color: var(--accent);
+      white-space: pre-wrap;
+    }
+    .preview {
+      margin-top: 12px;
+      max-height: 320px;
+      overflow: auto;
+      background: var(--surface-strong);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .preview-empty,
+    .preview-note-text {
+      white-space: pre-wrap;
+    }
+    .preview-empty {
+      color: var(--muted);
+    }
+    .preview-summary {
+      margin-bottom: 10px;
+    }
+    .preview-note {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(216, 207, 196, 0.85);
+    }
+    .preview-note:first-of-type {
+      margin-top: 10px;
+    }
+    .preview-note-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+    .preview-note-title {
+      font-weight: 700;
+      margin-bottom: 0;
+    }
+    .preview-note-action {
+      flex: 0 0 auto;
+      width: 34px;
+      min-height: 34px;
+      padding: 0;
+      border-radius: 999px;
+      border: 1px solid rgba(185, 75, 75, 0.18);
+      background: rgba(185, 75, 75, 0.08);
+      color: var(--danger);
+    }
+    .preview-note-action:hover {
+      border-color: rgba(185, 75, 75, 0.35);
+      background: rgba(185, 75, 75, 0.12);
+    }
+    .preview-note-action svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.9;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .preview-note-meta {
+      margin-top: 6px;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .preview-media {
+      margin-top: 10px;
+    }
+    .preview-media figcaption {
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .preview-media img {
+      display: block;
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+    }
+    .preview-media-frame {
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+      min-height: 160px;
+    }
+    .preview-media video {
+      display: block;
+      width: 100%;
+      margin-top: 0;
+      border: 0;
+      border-radius: 0;
+      background: var(--surface-soft);
+    }
+    .preview-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .preview-loading.centered {
+      position: absolute;
+      inset: 0;
+      justify-content: center;
+      padding: 14px;
+      background: var(--overlay);
+    }
+    .preview-loading.hidden {
+      display: none;
+    }
+    .preview-spinner {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid rgba(14, 118, 110, 0.18);
+      border-top-color: var(--accent);
+      animation: preview-spin 0.8s linear infinite;
+      flex: 0 0 auto;
+    }
+    @keyframes preview-spin {
+      to { transform: rotate(360deg); }
+    }
+    video {
+      width: 100%;
+      max-height: 220px;
+      margin-top: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--surface-soft);
+    }
+    .hidden {
+      display: none;
+    }
+    @media (max-width: 520px) {
+      .header {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <div class="header">
+        <div class="header-copy">
+          <div class="header-title-row">
+            <div class="header-brand">
+              <img class="header-mark" src="icons/icon32.png" alt="Knit logo" />
+              <h1>Knit Composer</h1>
+            </div>
+            <button id="themeToggleBtn" class="theme-toggle" title="Switch to dark theme" aria-label="Switch to dark theme">☾</button>
+          </div>
+          <p class="helper">After pairing, use the extension side panel for this tab's notes, snapshots, audio, video, preview, and submit.</p>
+        </div>
+        <div class="header-status-row">
+          <div id="sessionState" class="session-pill idle">Session idle</div>
+        </div>
+      </div>
+
+      <div class="row four-up">
+        <span class="tooltip-wrap" data-tooltip="Type note. Show or hide the typed note field.">
+          <button id="toggleTextBtn" class="icon-button" aria-label="Type note. Show or hide the typed note field.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20H21"></path><path d="M16.5 3.5A2.121 2.121 0 0 1 19.5 6.5L7 19L3 20L4 16L16.5 3.5Z"></path></svg>
+          </button>
+        </span>
+        <span class="tooltip-wrap" data-tooltip="Capture snapshot. Queue the current tab for your next typed or voice note.">
+          <button id="snapshotBtn" class="icon-button" aria-label="Capture snapshot. Queue the current tab for your next typed or voice note.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8H8L10 6H14L16 8H20V18H4Z"></path><circle cx="12" cy="13" r="3"></circle></svg>
+          </button>
+        </span>
+        <span class="tooltip-wrap" data-tooltip="Record a voice note for the current page.">
+          <button id="audioBtn" class="icon-button" aria-label="Record a voice note for the current page.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4C10.343 4 9 5.343 9 7V12C9 13.657 10.343 15 12 15C13.657 15 15 13.657 15 12V7C15 5.343 13.657 4 12 4Z"></path><path d="M7 11V12C7 14.761 9.239 17 12 17C14.761 17 17 14.761 17 12V11"></path><path d="M12 17V20"></path><path d="M9 20H15"></path></svg>
+          </button>
+        </span>
+        <span class="tooltip-wrap" data-tooltip="Record the current tab with voice.">
+          <button id="videoBtn" class="icon-button" aria-label="Record the current tab with voice.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="13" height="12" rx="2"></rect><path d="M16 10L21 7V17L16 14"></path></svg>
+          </button>
+        </span>
+      </div>
+
+      <div id="textNoteWrap" class="hidden">
+        <label class="field-label" for="noteText">Note for current page</label>
+        <textarea id="noteText" placeholder="Describe the issue from the page you are reviewing."></textarea>
+      </div>
+
+      <div class="row action-row">
+        <span class="tooltip-wrap" data-tooltip="Preview queued requests before submitting.">
+          <button id="previewBtn" class="icon-button" aria-label="Preview queued requests before submitting.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12S5.5 6 12 6S22 12 22 12S18.5 18 12 18S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </span>
+        <span class="tooltip-wrap" data-tooltip="Submit the current package to the daemon queue.">
+          <button id="submitBtn" class="icon-button" aria-label="Submit the current package to the daemon queue.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4V16"></path><path d="M7 9L12 4L17 9"></path><path d="M5 20H19"></path></svg>
+          </button>
+        </span>
+        <span class="tooltip-wrap" data-tooltip="Clear session.">
+          <button id="stopBtn" class="icon-button" aria-label="Clear session.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18"></path><path d="M6 6L18 18"></path></svg>
+          </button>
+        </span>
+      </div>
+
+      <div id="captureState" class="capture-state hidden"></div>
+      <div id="activityState" class="preview-loading activity-state hidden" aria-live="polite">
+        <span class="preview-spinner" aria-hidden="true"></span>
+        <span id="activityStateText">Working…</span>
+      </div>
+      <div id="submitNotice" class="notice hidden" aria-live="polite"></div>
+      <div id="status" class="status">Pair the extension from the popup first.</div>
+      <div id="preview" class="preview"><div class="preview-empty">Preview updates here automatically as you capture notes, snapshots, audio, and video.</div></div>
+      <video id="previewVideo" class="hidden" autoplay muted playsinline></video>
+    </section>
+  </main>
+  <script src="recorder.js"></script>
+</body>
+</html>

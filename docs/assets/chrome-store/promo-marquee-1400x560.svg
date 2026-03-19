@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="560" viewBox="0 0 1400 560" role="img" aria-labelledby="title desc">
+  <title id="title">Knit marquee promo image</title>
+  <desc id="desc">A wide promotional image showing the Knit Browser Composer next to a browser page.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a1320"/>
+      <stop offset="100%" stop-color="#16314d"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8af3df"/>
+      <stop offset="100%" stop-color="#2ea69a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1400" height="560" fill="url(#bg)"/>
+  <circle cx="216" cy="112" r="160" fill="#17304a" opacity="0.28"/>
+  <circle cx="1260" cy="452" r="190" fill="#123048" opacity="0.24"/>
+  <circle cx="144" cy="112" r="44" fill="url(#accent)"/>
+  <text x="212" y="116" fill="#f4f8fc" font-size="46" font-weight="700" font-family="Arial, sans-serif">Knit</text>
+  <text x="212" y="168" fill="#f4f8fc" font-size="46" font-weight="700" font-family="Arial, sans-serif">Browser Composer</text>
+  <text x="148" y="234" fill="#b4c6d9" font-size="28" font-family="Arial, sans-serif">Capture browser-grounded requests with snapshots, voice,</text>
+  <text x="148" y="272" fill="#b4c6d9" font-size="28" font-family="Arial, sans-serif">and tab video without leaving the page you are reviewing.</text>
+
+  <rect x="148" y="322" width="696" height="142" rx="26" fill="#132233" stroke="#223449"/>
+  <text x="184" y="370" fill="#87f1dc" font-size="14" font-weight="700" font-family="Arial, sans-serif">BROWSER-BOUND REVIEW</text>
+  <text x="184" y="412" fill="#eef4fb" font-size="28" font-weight="700" font-family="Arial, sans-serif">Attach feedback to the tab that matters.</text>
+  <text x="184" y="444" fill="#a7b9cd" font-size="22" font-family="Arial, sans-serif">Pair once with a local daemon. Capture only what the user requests.</text>
+
+  <rect x="884" y="96" width="360" height="368" rx="28" fill="#f6f0e8" stroke="#d8c9b5"/>
+  <text x="918" y="144" fill="#232d38" font-size="28" font-weight="700" font-family="Arial, sans-serif">Browser Composer</text>
+  <rect x="918" y="170" width="140" height="34" rx="17" fill="#dff7ef"/>
+  <text x="946" y="192" fill="#167b6f" font-size="15" font-weight="700" font-family="Arial, sans-serif">Session active</text>
+  <g transform="translate(918 228)">
+    <rect width="62" height="46" rx="12" fill="#efe5d6"/>
+    <rect x="76" width="62" height="46" rx="12" fill="#efe5d6"/>
+    <rect x="152" width="62" height="46" rx="12" fill="#efe5d6"/>
+    <rect x="228" width="62" height="46" rx="12" fill="#efe5d6"/>
+  </g>
+  <rect x="918" y="298" width="276" height="112" rx="18" fill="#fffdfb" stroke="#d8c9b5"/>
+  <text x="944" y="340" fill="#6b7583" font-size="18" font-family="Arial, sans-serif">Typed note, snapshot,</text>
+  <text x="944" y="368" fill="#6b7583" font-size="18" font-family="Arial, sans-serif">voice note, or tab video.</text>
+  <g transform="translate(918 430)">
+    <rect width="122" height="42" rx="12" fill="#efe5d6"/>
+    <rect x="138" width="122" height="42" rx="12" fill="#efe5d6"/>
+    <rect y="56" width="82" height="42" rx="12" fill="url(#accent)"/>
+    <rect x="94" y="56" width="82" height="42" rx="12" fill="#efe5d6"/>
+    <rect x="188" y="56" width="82" height="42" rx="12" fill="#f4d2d2"/>
+  </g>
+</svg>
