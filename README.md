@@ -16,14 +16,13 @@ The project is aimed at teams who want a tighter loop between live product revie
 ### Prerequisites
 
 - Go installed locally
-- A supported desktop environment for the local daemon and browser workflow
+- A supported desktop environment for the local daemon (Windows, Mac, Linux)
 - A coding agent you actually plan to send work to, configured before your first submit
 - Optional:
   - Codex CLI or API access
   - Claude Code-style CLI
   - OpenCode-compatible CLI
-  - LM Studio
-  - Python 3 for managed faster-whisper bootstrap
+  - Python 3 for managed faster-whisper bootstrap (Speech to Text)
 
 ### Install and run the daemon
 

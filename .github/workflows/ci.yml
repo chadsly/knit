@@ -122,6 +122,9 @@ jobs:
       - build-matrix
       - sbom
       - vulnerability-scan
+    env:
+      RELEASE_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+      RELEASE_SIGNING_PUBLIC_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -153,11 +156,11 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Materialize signing keys
-        if: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY != '' }}
+        if: ${{ env.RELEASE_SIGNING_PRIVATE_KEY_SECRET != '' }}
         shell: bash
         env:
-          PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
-          PUBLIC_KEY: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
+          PRIVATE_KEY: ${{ env.RELEASE_SIGNING_PRIVATE_KEY_SECRET }}
+          PUBLIC_KEY: ${{ env.RELEASE_SIGNING_PUBLIC_KEY_SECRET }}
         run: |
           private_key_path="$RUNNER_TEMP/release-private.pem"
           printf '%s\n' "$PRIVATE_KEY" > "$private_key_path"
@@ -184,6 +187,8 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - package-release
+    env:
+      RELEASE_SIGNING_PUBLIC_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Download packaged release artifacts
@@ -192,10 +197,10 @@ jobs:
           name: packaged-release
           path: dist-ci/packages/
       - name: Materialize public key
-        if: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY != '' }}
+        if: ${{ env.RELEASE_SIGNING_PUBLIC_KEY_SECRET != '' }}
         shell: bash
         env:
-          PUBLIC_KEY: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
+          PUBLIC_KEY: ${{ env.RELEASE_SIGNING_PUBLIC_KEY_SECRET }}
         run: |
           public_key_path="$RUNNER_TEMP/release-public.pem"
           printf '%s\n' "$PUBLIC_KEY" > "$public_key_path"

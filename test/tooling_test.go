@@ -93,6 +93,26 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 			t.Fatalf("expected workflow fragment %q", fragment)
 		}
 	}
+	disallowed := []string{
+		"if: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY != '' }}",
+		"if: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY != '' }}",
+	}
+	for _, fragment := range disallowed {
+		if strings.Contains(workflow, fragment) {
+			t.Fatalf("did not expect workflow to reference secrets directly in if expressions: %q", fragment)
+		}
+	}
+	requiredEnvFragments := []string{
+		"RELEASE_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}",
+		"RELEASE_SIGNING_PUBLIC_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}",
+		"if: ${{ env.RELEASE_SIGNING_PRIVATE_KEY_SECRET != '' }}",
+		"if: ${{ env.RELEASE_SIGNING_PUBLIC_KEY_SECRET != '' }}",
+	}
+	for _, fragment := range requiredEnvFragments {
+		if !strings.Contains(workflow, fragment) {
+			t.Fatalf("expected workflow fragment %q", fragment)
+		}
+	}
 }
 
 func TestCodexCLIAdapterUsesTopLevelApprovalFlagBeforeExec(t *testing.T) {
