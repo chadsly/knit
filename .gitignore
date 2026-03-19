@@ -35,7 +35,6 @@
 # Coding agent stuff
 REQUIREMENTS.md
 AGENTS.md
-/docs/CHROME_WEB_STORE_LISTING.md
 /docs/MVP_DECISIONS.md
 /test/requirements_tracker_test.go
 
