@@ -23,7 +23,8 @@ type State struct {
 }
 
 type System struct {
-	AutoStartEnabled bool `json:"auto_start_enabled"`
+	AutoStartEnabled      bool `json:"auto_start_enabled"`
+	CheckUpdatesOnStartup bool `json:"check_updates_on_startup"`
 }
 
 type RuntimeCodex struct {
@@ -99,6 +100,7 @@ const (
 	DefaultLocalCodingSandbox    = "workspace-write"
 	DefaultLocalCodingApproval   = "never"
 	DefaultDeliveryIntentProfile = agents.IntentImplementChanges
+	DefaultCheckUpdatesOnStartup = true
 )
 
 func NormalizeRuntimeCodexDefaults(state RuntimeCodex) RuntimeCodex {
@@ -207,7 +209,8 @@ func Capture(cfg config.Config, audioState audio.State) State {
 	return State{
 		Version: 1,
 		System: System{
-			AutoStartEnabled: readEnvBool("KNIT_AUTO_START"),
+			AutoStartEnabled:      readEnvBool("KNIT_AUTO_START"),
+			CheckUpdatesOnStartup: readEnvBoolDefault("KNIT_CHECK_UPDATES_ON_STARTUP", DefaultCheckUpdatesOnStartup),
 		},
 		RuntimeCodex: NormalizeRuntimeCodexDefaults(RuntimeCodex{
 			DefaultProvider:         strings.TrimSpace(os.Getenv("KNIT_DEFAULT_PROVIDER")),
@@ -265,6 +268,7 @@ func Apply(cfg config.Config, controller *audio.Controller, state *State) config
 	state.RuntimeCodex = NormalizeRuntimeCodexDefaults(state.RuntimeCodex)
 	cfg.AutoStartEnabled = state.System.AutoStartEnabled
 	applyEnv("KNIT_AUTO_START", boolToEnv(state.System.AutoStartEnabled))
+	applyEnv("KNIT_CHECK_UPDATES_ON_STARTUP", boolToEnv(state.System.CheckUpdatesOnStartup))
 	applyRuntimeCodex(state.RuntimeCodex)
 	cfg.TranscriptionMode = strings.TrimSpace(firstNonEmpty(state.RuntimeTranscription.Mode, cfg.TranscriptionMode))
 	applyRuntimeTranscription(cfg.TranscriptionMode, state.RuntimeTranscription)
@@ -411,11 +415,17 @@ func readEnvInt(key string) int {
 }
 
 func readEnvBool(key string) bool {
+	return readEnvBoolDefault(key, false)
+}
+
+func readEnvBoolDefault(key string, fallback bool) bool {
 	switch strings.TrimSpace(strings.ToLower(os.Getenv(key))) {
 	case "1", "true", "yes", "on":
 		return true
-	default:
+	case "0", "false", "no", "off":
 		return false
+	default:
+		return fallback
 	}
 }
 

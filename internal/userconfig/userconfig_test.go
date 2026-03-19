@@ -17,6 +17,7 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	cfg.UserConfigPath = filepath.Join(cfg.DataDir, "knit.toml")
 	state := operatorstate.Capture(cfg, audio.NewController().State())
 	state.System.AutoStartEnabled = true
+	state.System.CheckUpdatesOnStartup = false
 	state.RuntimeCodex.DefaultProvider = "claude_api"
 	state.RuntimeCodex.CodexWorkdir = "/tmp/knit-workdir"
 	state.RuntimeCodex.DeliveryIntentProfile = "draft_plan"
@@ -41,6 +42,9 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	if !strings.Contains(text, "[runtime_codex]") {
 		t.Fatalf("expected runtime_codex section in saved config")
 	}
+	if !strings.Contains(text, "[system]") || !strings.Contains(text, "check_updates_on_startup = false") {
+		t.Fatalf("expected saved system update-check setting in config, got:\n%s", text)
+	}
 	if !strings.Contains(text, `default_provider = "claude_api"`) {
 		t.Fatalf("expected saved default provider in config, got:\n%s", text)
 	}
@@ -57,6 +61,9 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	}
 	if loaded.State.RuntimeCodex.DefaultProvider != "claude_api" {
 		t.Fatalf("expected loaded default provider claude_api, got %q", loaded.State.RuntimeCodex.DefaultProvider)
+	}
+	if loaded.State.System.CheckUpdatesOnStartup {
+		t.Fatalf("expected loaded startup update check to remain disabled")
 	}
 	if loaded.State.RuntimeCodex.DeliveryIntentProfile != "draft_plan" {
 		t.Fatalf("expected loaded delivery intent draft_plan, got %q", loaded.State.RuntimeCodex.DeliveryIntentProfile)
@@ -77,6 +84,8 @@ func TestRenderIncludesCommentedDefaults(t *testing.T) {
 
 	required := []string{
 		"# Secrets do not belong here.",
+		"[system]",
+		"# check_updates_on_startup = true",
 		"# allowed: faster_whisper, local, lmstudio, remote",
 		"# choose from: codex_cli, claude_cli, opencode_cli, codex_api, claude_api",
 		"# allowed: series, parallel",

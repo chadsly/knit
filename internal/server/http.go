@@ -77,6 +77,8 @@ type Server struct {
 	latency             *latencyBook
 	stt                 transcription.Provider
 	postSubmitRunner    func() *postSubmitResult
+	updateHTTPClient    *http.Client
+	updateReleaseAPIURL string
 	httpSrv             *http.Server
 }
 
@@ -238,23 +240,25 @@ func New(
 	transcriptionProvider transcription.Provider,
 ) *Server {
 	s := &Server{
-		cfg:               cfg,
-		nonces:            map[string]time.Time{},
-		pendingPairs:      map[string]pendingExtensionPairing{},
-		sessions:          sessions,
-		privilegedCapture: privilegedCapture,
-		audit:             auditLogger,
-		agents:            agentRegistry,
-		store:             store,
-		artifacts:         artifactStore,
-		autoStart:         autoStart,
-		latency:           newLatencyBook(512),
-		stt:               transcriptionProvider,
-		postSubmitRunner:  runPostSubmitAutomation,
-		submitRunning:     map[string]submitJob{},
-		submitCancel:      map[string]context.CancelFunc{},
-		submitCanceled:    map[string]string{},
-		submitQueuePath:   filepath.Join(cfg.DataDir, "submit_queue.json"),
+		cfg:                 cfg,
+		nonces:              map[string]time.Time{},
+		pendingPairs:        map[string]pendingExtensionPairing{},
+		sessions:            sessions,
+		privilegedCapture:   privilegedCapture,
+		audit:               auditLogger,
+		agents:              agentRegistry,
+		store:               store,
+		artifacts:           artifactStore,
+		autoStart:           autoStart,
+		latency:             newLatencyBook(512),
+		stt:                 transcriptionProvider,
+		postSubmitRunner:    runPostSubmitAutomation,
+		submitRunning:       map[string]submitJob{},
+		submitCancel:        map[string]context.CancelFunc{},
+		submitCanceled:      map[string]string{},
+		submitQueuePath:     filepath.Join(cfg.DataDir, "submit_queue.json"),
+		updateHTTPClient:    &http.Client{Timeout: 5 * time.Second},
+		updateReleaseAPIURL: defaultReleaseCheckAPIURL,
 	}
 	if privilegedCapture != nil {
 		s.runtime = operatorstate.Capture(cfg, privilegedCapture.AudioState())
@@ -288,6 +292,7 @@ func New(
 	mux.HandleFunc("/companion.js", s.handleCompanionScript)
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/api/state", s.handleState)
+	mux.HandleFunc("/api/update/check", s.handleUpdateCheck)
 	mux.HandleFunc("/api/session/start", s.handleSessionStart)
 	mux.HandleFunc("/api/session/pause", s.handleSessionPause)
 	mux.HandleFunc("/api/session/resume", s.handleSessionResume)
@@ -617,6 +622,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	cfg := s.currentConfig()
 	writeJSON(w, map[string]any{
 		"ok":                true,
+		"current_version":   runtimeVersion(cfg),
 		"build_id":          cfg.BuildID,
 		"version_pin":       cfg.VersionPin,
 		"platform_profile":  platform.CurrentProfile(),
@@ -697,6 +703,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"allow_remote_submission":  cfg.AllowRemoteSubmission,
 		"local_profile":            cfg.LocalProfile,
 		"environment_name":         cfg.EnvironmentName,
+		"current_version":          runtimeVersion(cfg),
 		"build_id":                 cfg.BuildID,
 		"version_pin":              cfg.VersionPin,
 		"managed_deployment_id":    cfg.ManagedDeploymentID,
@@ -711,6 +718,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"outbound_blocklist_size":  len(cfg.BlockedTargets),
 		"runtime_codex":            s.runtimeAgentState(),
 		"runtime_transcription":    s.runtimeTranscriptionState(cfg, sttProvider),
+		"update_check_on_startup":  s.runtime.System.CheckUpdatesOnStartup,
 		"extension_pairings":       s.extensionPairingsPublic(),
 	})
 }

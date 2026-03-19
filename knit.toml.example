@@ -3,6 +3,10 @@
 # Knit rewrites the live config file in a canonical order as settings change in the UI.
 # Keep secrets in .env or your OS keychain instead of this file.
 
+[system]
+# checks GitHub Releases when the main UI first loads; set false to disable the automatic startup check
+# check_updates_on_startup = true
+
 [config]
 # local_profile = "local-default"
 # environment_name = "local-dev"

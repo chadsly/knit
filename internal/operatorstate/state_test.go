@@ -14,6 +14,7 @@ func TestApplyRestoresRuntimeAndAudioState(t *testing.T) {
 	t.Setenv("KNIT_DEFAULT_PROVIDER", "")
 	t.Setenv("KNIT_CODEX_SANDBOX", "")
 	t.Setenv("KNIT_CODEX_APPROVAL_POLICY", "")
+	t.Setenv("KNIT_CHECK_UPDATES_ON_STARTUP", "")
 	t.Setenv("KNIT_CLAUDE_API_MODEL", "")
 	t.Setenv("ANTHROPIC_BASE_URL", "")
 	t.Setenv("KNIT_CLAUDE_API_TIMEOUT_SECONDS", "")
@@ -27,7 +28,8 @@ func TestApplyRestoresRuntimeAndAudioState(t *testing.T) {
 	state := &State{
 		Version: 1,
 		System: System{
-			AutoStartEnabled: true,
+			AutoStartEnabled:      true,
+			CheckUpdatesOnStartup: false,
 		},
 		RuntimeCodex: RuntimeCodex{
 			DefaultProvider:         "codex_cli",
@@ -81,6 +83,9 @@ func TestApplyRestoresRuntimeAndAudioState(t *testing.T) {
 	if got := os.Getenv("KNIT_AUTO_START"); got != "1" {
 		t.Fatalf("expected restored auto-start env, got %q", got)
 	}
+	if got := os.Getenv("KNIT_CHECK_UPDATES_ON_STARTUP"); got != "0" {
+		t.Fatalf("expected restored update-check env, got %q", got)
+	}
 	if !cfg.AutoStartEnabled {
 		t.Fatalf("expected restored auto-start config")
 	}
@@ -90,6 +95,20 @@ func TestApplyRestoresRuntimeAndAudioState(t *testing.T) {
 	audioState := controller.State()
 	if audioState.Mode != audio.ModePushToTalk || audioState.InputDeviceID != "mic-2" || !audioState.Muted {
 		t.Fatalf("unexpected restored audio state: %#v", audioState)
+	}
+}
+
+func TestCaptureDefaultsUpdateCheckOnStartupAndReadsEnvOverride(t *testing.T) {
+	t.Setenv("KNIT_CHECK_UPDATES_ON_STARTUP", "")
+	state := Capture(config.Default(), audio.NewController().State())
+	if !state.System.CheckUpdatesOnStartup {
+		t.Fatalf("expected startup update check to default on")
+	}
+
+	t.Setenv("KNIT_CHECK_UPDATES_ON_STARTUP", "0")
+	state = Capture(config.Default(), audio.NewController().State())
+	if state.System.CheckUpdatesOnStartup {
+		t.Fatalf("expected env override to disable startup update check")
 	}
 }
 

@@ -31,11 +31,16 @@ const (
 )
 
 type File struct {
+	System               systemSection               `toml:"system"`
 	Config               config.PublicConfig         `toml:"config"`
 	RuntimeCodex         runtimeCodexSection         `toml:"runtime_codex"`
 	RuntimeTranscription runtimeTranscriptionSection `toml:"runtime_transcription"`
 	Audio                audioSection                `toml:"audio"`
 	Prompts              promptSection               `toml:"prompts"`
+}
+
+type systemSection struct {
+	CheckUpdatesOnStartup *bool `toml:"check_updates_on_startup,omitempty"`
 }
 
 type runtimeCodexSection struct {
@@ -140,6 +145,7 @@ func Load(baseCfg config.Config, audioState audio.State) (Loaded, error) {
 	}
 	loaded.Exists = true
 	loaded.Config = config.ApplyPublic(baseCfg, file.Config)
+	applySystemSection(&loaded.State.System, file.System)
 	applyRuntimeCodexSection(&loaded.State.RuntimeCodex, file.RuntimeCodex)
 	applyRuntimeTranscriptionSection(&loaded.State.RuntimeTranscription, file.RuntimeTranscription)
 	applyAudioSection(&loaded.State.Audio, file.Audio)
@@ -247,6 +253,15 @@ func applyPromptSection(dst *operatorstate.RuntimeCodex, src promptSection) {
 	dst.CreateJiraTicketsPrompt = strings.TrimSpace(src.CreateJiraTicketsText)
 }
 
+func applySystemSection(dst *operatorstate.System, src systemSection) {
+	if dst == nil {
+		return
+	}
+	if src.CheckUpdatesOnStartup != nil {
+		dst.CheckUpdatesOnStartup = *src.CheckUpdatesOnStartup
+	}
+}
+
 func renderFile(cfg config.Config, state operatorstate.State) string {
 	cfgPublic := config.ExportPublic(cfg)
 	rc := operatorstate.NormalizeRuntimeCodexDefaults(state.RuntimeCodex)
@@ -256,6 +271,9 @@ func renderFile(cfg config.Config, state operatorstate.State) string {
 	b.WriteString("# Knit user configuration\n")
 	b.WriteString("# This file is app-managed. Edit it if you want, but Knit may rewrite comments/order on save.\n")
 	b.WriteString("# Secrets do not belong here. Use .env or your OS keychain for API keys and tokens.\n\n")
+
+	writeSectionHeader(&b, "system")
+	writeBool(&b, "check_updates_on_startup", state.System.CheckUpdatesOnStartup, operatorstate.DefaultCheckUpdatesOnStartup, "checks GitHub Releases when the main UI first loads; set false to disable the automatic startup check")
 
 	writeSectionHeader(&b, "config")
 	writeString(&b, "local_profile", cfgPublic.LocalProfile, "local-default", "")

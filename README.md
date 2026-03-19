@@ -219,6 +219,13 @@ http://127.0.0.1:7777
 
 On first run, Knit writes a user-facing config file at `./knit.toml` by default. If a legacy `./.knit/knit.toml` already exists, Knit will continue using it until you move it. Override either path with `KNIT_CONFIG_PATH` if you want the config somewhere else.
 
+The main UI shows the running Knit version in the hero area and includes a manual `Check for updates` action. Knit also checks for new GitHub releases when the UI first loads by default and shows a dismissible banner when an update is available. Disable that startup check in `knit.toml` with:
+
+```toml
+[system]
+check_updates_on_startup = false
+```
+
 ### Run With The Tray
 
 ```bash
@@ -281,6 +288,8 @@ Knit now has two explicit config surfaces:
   Persistent user defaults for capture, agent runtime, prompt templates, retention, and policy-oriented settings.
 - `.env`
   Secrets and env-only operational overrides such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `KNIT_CONFIG_PATH`.
+
+That `knit.toml` file also controls UI-facing defaults such as whether Knit should automatically check for updates when the main UI loads.
 
 The repository includes:
 

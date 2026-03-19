@@ -61,8 +61,8 @@ func TestStateIncludesEnterpriseControls(t *testing.T) {
 	cfg.ControlToken = "test-token"
 	cfg.CaptureSettingsLocked = true
 	cfg.ManagedDeploymentID = "fleet-a"
-	cfg.VersionPin = "build-123"
-	cfg.BuildID = "build-123"
+	cfg.VersionPin = "0.9.0"
+	cfg.BuildID = "0.9.0"
 	cfg.AllowedSubmitProviders = []string{"codex_cli"}
 	cfg.SIEMLogPath = "siem/audit.jsonl"
 	srv := newTestServer(t, cfg)
@@ -84,8 +84,14 @@ func TestStateIncludesEnterpriseControls(t *testing.T) {
 	if got := payload["managed_deployment_id"]; got != "fleet-a" {
 		t.Fatalf("expected managed_deployment_id=fleet-a, got %v", got)
 	}
-	if got := payload["version_pin"]; got != "build-123" {
-		t.Fatalf("expected version_pin=build-123, got %v", got)
+	if got := payload["version_pin"]; got != "0.9.0" {
+		t.Fatalf("expected version_pin=0.9.0, got %v", got)
+	}
+	if got := payload["current_version"]; got != "0.9.0" {
+		t.Fatalf("expected current_version=0.9.0, got %v", got)
+	}
+	if enabled, _ := payload["update_check_on_startup"].(bool); !enabled {
+		t.Fatalf("expected update_check_on_startup=true")
 	}
 	allowed, _ := payload["allowed_submit_providers"].([]any)
 	if len(allowed) != 1 || allowed[0] != "codex_cli" {
@@ -97,6 +103,54 @@ func TestStateIncludesEnterpriseControls(t *testing.T) {
 	runtimePlatform, _ := payload["runtime_platform"].(map[string]any)
 	if runtimePlatform["host_target"] == "" || runtimePlatform["runtime_summary"] == "" {
 		t.Fatalf("expected runtime_platform metadata, got %#v", runtimePlatform)
+	}
+}
+
+func TestUpdateCheckEndpointReturnsLatestRelease(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	cfg.BuildID = "0.1.0"
+	cfg.VersionPin = "0.1.0"
+	srv := newTestServer(t, cfg)
+
+	releaseAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"tag_name":"v0.2.0","html_url":"https://github.com/chadsly/knit/releases/tag/v0.2.0"}`))
+	}))
+	defer releaseAPI.Close()
+
+	srv.updateHTTPClient = releaseAPI.Client()
+	srv.updateReleaseAPIURL = releaseAPI.URL
+
+	req := httptest.NewRequest(http.MethodGet, "/api/update/check", nil)
+	addAuth(req, cfg.ControlToken, false, "")
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var payload updateCheckResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Status != "update_available" {
+		t.Fatalf("expected update_available status, got %#v", payload)
+	}
+	if !payload.UpdateAvailable {
+		t.Fatalf("expected update_available=true, got %#v", payload)
+	}
+	if payload.CurrentVersion != "0.1.0" {
+		t.Fatalf("expected current version 0.1.0, got %#v", payload)
+	}
+	if payload.LatestVersion != "0.2.0" {
+		t.Fatalf("expected latest version 0.2.0, got %#v", payload)
+	}
+	if payload.ReleaseURL != "https://github.com/chadsly/knit/releases/tag/v0.2.0" {
+		t.Fatalf("expected release URL in payload, got %#v", payload)
 	}
 }
 
@@ -383,6 +437,15 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	}
 	if !strings.Contains(body, `onclick="openAgentSettingsFromNotice(event)"`) || !strings.Contains(body, `Change it in <a href="#" onclick="openAgentSettingsFromNotice(event)">Settings</a> → Agent`) {
 		t.Fatalf("expected step 2 coding-agent notice to link directly into agent settings")
+	}
+	if !strings.Contains(body, `id="currentVersionLabel"`) || !strings.Contains(body, `id="manualUpdateCheckBtn"`) || !strings.Contains(body, `Check for updates`) {
+		t.Fatalf("expected hero to expose the current version and manual update check action")
+	}
+	if !strings.Contains(body, `id="updateBanner"`) || !strings.Contains(body, `View release notes`) || !strings.Contains(body, `dismissUpdateBanner()`) {
+		t.Fatalf("expected index to include a dismissible update banner")
+	}
+	if !strings.Contains(body, `function maybeRunStartupUpdateCheck()`) || !strings.Contains(body, `checkForUpdates(false)`) || !strings.Contains(body, `dismissed_update_version`) {
+		t.Fatalf("expected index to include startup update-check logic with dismiss persistence")
 	}
 	if strings.Contains(body, `id="captureOptionExtension" class="capture-option-card">`) && strings.Contains(body, `id="captureOptionComposer" class="capture-option-card">`) {
 		extensionSectionIndex := strings.Index(body, `id="captureOptionExtension" class="capture-option-card">`)

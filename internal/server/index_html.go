@@ -108,6 +108,28 @@ const indexHTML = `<!doctype html>
       font-size: .9rem;
       color: var(--muted);
     }
+    .hero-version-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .65rem;
+      align-items: center;
+      margin-top: .45rem;
+    }
+    .hero-version-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--panel-solid);
+      color: var(--muted);
+      padding: .38rem .72rem;
+      font-size: .88rem;
+      font-weight: 700;
+    }
+    .update-check-btn {
+      white-space: nowrap;
+    }
     .hero-topline {
       display: flex;
       align-items: flex-start;
@@ -402,6 +424,53 @@ const indexHTML = `<!doctype html>
       font-size: .84rem;
       letter-spacing: .02em;
       text-transform: uppercase;
+    }
+    .update-banner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .85rem;
+      padding: .95rem 1.1rem;
+      border-radius: 18px;
+      border: 1px solid rgba(28, 124, 116, 0.24);
+      background: linear-gradient(135deg, var(--accent-soft), var(--panel-solid));
+      box-shadow: var(--shadow);
+      margin-bottom: 1rem;
+    }
+    .update-banner-copy {
+      display: grid;
+      gap: .2rem;
+      min-width: 0;
+      flex: 1 1 320px;
+    }
+    .update-banner-title {
+      font-size: .88rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--accent-strong);
+    }
+    .update-banner-text {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .update-banner-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .65rem;
+      align-items: center;
+    }
+    .text-link {
+      color: var(--accent-strong);
+      text-decoration: none;
+      font-weight: 700;
+      border-bottom: 1px solid transparent;
+    }
+    .text-link:hover,
+    .text-link:focus-visible {
+      border-bottom-color: currentColor;
+      outline: none;
     }
     .status { font-weight: 700; }
     .step-header-main {
@@ -856,6 +925,10 @@ const indexHTML = `<!doctype html>
             <div class="hero-brand-copy">
               <span class="hero-brand-name">Knit</span>
               <span class="hero-brand-tagline">Local-first multimodal AI feedback runtime</span>
+              <div class="hero-version-row">
+                <span id="currentVersionLabel" class="hero-version-chip">Version loading...</span>
+                <button id="manualUpdateCheckBtn" class="secondary update-check-btn" onclick="checkForUpdates(true)" title="Check for updates">Check for updates</button>
+              </div>
             </div>
           </div>
           <div class="hero-topline">
@@ -874,6 +947,17 @@ const indexHTML = `<!doctype html>
             <span class="metric-value status" id="sessionId">none</span>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section id="updateBanner" class="update-banner hidden" role="status" aria-live="polite">
+      <div class="update-banner-copy">
+        <div class="update-banner-title">Update available</div>
+        <div id="updateBannerText" class="update-banner-text">A newer Knit release is ready.</div>
+      </div>
+      <div class="update-banner-actions">
+        <a id="updateBannerLink" class="text-link hidden" href="#" target="_blank" rel="noreferrer noopener">View release notes</a>
+        <button class="secondary" onclick="dismissUpdateBanner()" title="Dismiss update banner">Dismiss</button>
       </div>
     </section>
 
@@ -1629,6 +1713,11 @@ const laserModeEnabledEl = document.getElementById('laserModeEnabled');
 const sessionPlayBtnEl = document.getElementById('sessionPlayBtn');
 const sessionPauseResumeBtnEl = document.getElementById('sessionPauseResumeBtn');
 const sessionStopBtnEl = document.getElementById('sessionStopBtn');
+const currentVersionLabelEl = document.getElementById('currentVersionLabel');
+const manualUpdateCheckBtnEl = document.getElementById('manualUpdateCheckBtn');
+const updateBannerEl = document.getElementById('updateBanner');
+const updateBannerTextEl = document.getElementById('updateBannerText');
+const updateBannerLinkEl = document.getElementById('updateBannerLink');
 
 let currentState = null;
 let previewDeliveryOptions = { redactReplayValues: false, omitVideoClips: false, omitVideoEventIDs: [] };
@@ -1712,6 +1801,9 @@ const UI_SETTINGS_KEY = 'knit_ui_settings_v1';
 let uiSettings = {};
 let currentTheme = 'light';
 let appToastTimer = 0;
+let startupUpdateCheckAttempted = false;
+let latestUpdateCheck = null;
+let updateCheckInFlight = false;
 
 function loadUISettings() {
   try {
@@ -1753,6 +1845,110 @@ function showToast(msg, isError = false) {
   appToastTimer = window.setTimeout(() => {
     appToastEl.classList.remove('visible');
   }, 2200);
+}
+
+function dismissedUpdateVersion() {
+  return String(uiSettings.dismissed_update_version || '').trim();
+}
+
+function setDismissedUpdateVersion(version) {
+  setUISetting('dismissed_update_version', String(version || '').trim());
+}
+
+function hideUpdateBanner() {
+  if (!updateBannerEl) return;
+  updateBannerEl.classList.add('hidden');
+}
+
+function renderCurrentVersion() {
+  if (!currentVersionLabelEl) return;
+  const version = String(currentState?.current_version || 'dev').trim() || 'dev';
+  currentVersionLabelEl.textContent = 'Version ' + version;
+}
+
+function renderUpdateBanner(result, force = false) {
+  if (!updateBannerEl || !updateBannerTextEl || !result || !result.update_available) {
+    hideUpdateBanner();
+    return;
+  }
+  const latest = String(result.latest_version || '').trim();
+  if (!force && latest && dismissedUpdateVersion() === latest) {
+    hideUpdateBanner();
+    return;
+  }
+  const current = String(result.current_version || currentState?.current_version || 'dev').trim() || 'dev';
+  updateBannerTextEl.textContent = 'Knit ' + latest + ' is available. You are on ' + current + '.';
+  if (updateBannerLinkEl) {
+    const releaseURL = String(result.release_url || '').trim();
+    updateBannerLinkEl.href = releaseURL || '#';
+    updateBannerLinkEl.classList.toggle('hidden', !releaseURL);
+  }
+  updateBannerEl.classList.remove('hidden');
+}
+
+function dismissUpdateBanner() {
+  const latest = String(latestUpdateCheck?.latest_version || '').trim();
+  if (latest) {
+    setDismissedUpdateVersion(latest);
+  }
+  hideUpdateBanner();
+}
+
+async function checkForUpdates(manual = false) {
+  if (updateCheckInFlight) return;
+  updateCheckInFlight = true;
+  const prevLabel = manualUpdateCheckBtnEl ? manualUpdateCheckBtnEl.textContent : '';
+  if (manualUpdateCheckBtnEl) {
+    manualUpdateCheckBtnEl.disabled = true;
+    manualUpdateCheckBtnEl.innerHTML = '<span class="spinner"></span>Checking...';
+  }
+  try {
+    const res = await fetch('/api/update/check', { headers: authHeaders(false) });
+    const txt = await res.text();
+    if (!res.ok) throw new Error(txt || ('HTTP ' + res.status));
+    const data = txt ? JSON.parse(txt) : {};
+    latestUpdateCheck = data;
+    if (data.update_available) {
+      renderUpdateBanner(data, manual);
+      if (manual) {
+        showToast('Knit ' + String(data.latest_version || '').trim() + ' is available.');
+      }
+      return;
+    }
+    hideUpdateBanner();
+    if (!manual) return;
+    switch (String(data.status || '').trim()) {
+      case 'up_to_date':
+        showToast('Knit is up to date (' + String(data.current_version || 'dev').trim() + ').');
+        break;
+      case 'current_build_unversioned':
+        showToast('Latest stable release: ' + String(data.latest_version || '').trim() + '. Current build: ' + String(data.current_version || 'dev').trim() + '.');
+        break;
+      default:
+        showToast(String(data.message || 'No newer release found.'));
+        break;
+    }
+  } catch (err) {
+    if (manual) {
+      showToast('Update check failed: ' + err.message, true);
+    }
+  } finally {
+    updateCheckInFlight = false;
+    if (manualUpdateCheckBtnEl) {
+      manualUpdateCheckBtnEl.disabled = false;
+      manualUpdateCheckBtnEl.textContent = prevLabel || 'Check for updates';
+    }
+  }
+}
+
+function maybeRunStartupUpdateCheck() {
+  if (startupUpdateCheckAttempted) return;
+  if (currentState?.update_check_on_startup === false) {
+    startupUpdateCheckAttempted = true;
+    return;
+  }
+  startupUpdateCheckAttempted = true;
+  void checkForUpdates(false);
 }
 
 function handleStateRefreshFailure(message) {
@@ -3885,6 +4081,7 @@ async function refresh() {
     currentState = txt ? JSON.parse(txt) : {};
     stateRefreshError = '';
     syncProviderOptionsFromState();
+    renderCurrentVersion();
     document.getElementById('capture').textContent = currentState.capture_state;
     document.getElementById('sessionId').textContent = currentState.session?.id || 'none';
     syncSessionDetailInputsFromState();
@@ -3973,12 +4170,13 @@ async function refresh() {
     selected_workspace: workspaceDirEl.value || '',
     picker: 'native folder dialog'
   }, null, 2);
-  updateWorkspaceModalState();
-  if (!workspacePrompted) {
-    workspacePrompted = true;
-    openWorkspaceModal();
-  }
-  stateEl.textContent = JSON.stringify(currentState, null, 2);
+    updateWorkspaceModalState();
+    if (!workspacePrompted) {
+      workspacePrompted = true;
+      openWorkspaceModal();
+    }
+    maybeRunStartupUpdateCheck();
+    stateEl.textContent = JSON.stringify(currentState, null, 2);
   refreshActiveSubmitLog();
 }
 

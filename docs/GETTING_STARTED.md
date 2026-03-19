@@ -73,6 +73,15 @@ http://127.0.0.1:7777
 
 By default, Knit writes its persistent user config to `./knit.toml`. If you already have a legacy `.knit/knit.toml`, Knit will keep using that until you move it. Set `KNIT_CONFIG_PATH` if you want the file somewhere else. Use `.env` for secrets such as `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`; the checked-in examples are `knit.toml.example` and `.env.example`.
 
+The main UI hero shows the current Knit version and includes a manual `Check for updates` button. By default, Knit also checks GitHub Releases once when the UI first loads and shows a dismissible banner if a newer release is available.
+
+To disable the startup update check, set this in `knit.toml`:
+
+```toml
+[system]
+check_updates_on_startup = false
+```
+
 If you want the tray controller instead of just the daemon, use one of these methods:
 
 :::tabs
