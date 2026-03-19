@@ -7,7 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,12 +63,35 @@ type extensionSessionState struct {
 
 type authContextKey struct{}
 
+const pairingCodeAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
 func randomSecretToken() string {
 	raw := make([]byte, 24)
 	if _, err := rand.Read(raw); err != nil {
 		return fmt.Sprintf("knit-ext-%d", time.Now().UTC().UnixNano())
 	}
 	return base64.RawURLEncoding.EncodeToString(raw)
+}
+
+func randomPairingCode(length int) string {
+	if length <= 0 {
+		length = 8
+	}
+	var out strings.Builder
+	out.Grow(length)
+	max := big.NewInt(int64(len(pairingCodeAlphabet)))
+	for i := 0; i < length; i++ {
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			fallback := strings.ToUpper(strconv.FormatInt(time.Now().UTC().UnixNano(), 36))
+			if len(fallback) < length {
+				fallback += strings.Repeat("0", length-len(fallback))
+			}
+			return fallback[:length]
+		}
+		out.WriteByte(pairingCodeAlphabet[n.Int64()])
+	}
+	return out.String()
 }
 
 func hashToken(raw string) string {

@@ -47,7 +47,7 @@ func (s *Server) handleExtensionPairStart(w http.ResponseWriter, r *http.Request
 	now := time.Now().UTC()
 	pairing := pendingExtensionPairing{
 		ID:           "ext-" + now.Format("20060102150405.000000000"),
-		Code:         strings.ToUpper(randomSecretToken()[:8]),
+		Code:         randomPairingCode(8),
 		Name:         truncateCompanionField(strings.TrimSpace(req.Name), 80),
 		Browser:      truncateCompanionField(strings.TrimSpace(req.Browser), 40),
 		Platform:     truncateCompanionField(strings.TrimSpace(req.Platform), 40),

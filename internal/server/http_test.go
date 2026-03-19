@@ -4741,6 +4741,9 @@ func TestExtensionPairingIssuesScopedTokenAndSupportsSessionFlow(t *testing.T) {
 	if pairingCode == "" {
 		t.Fatalf("expected pairing code")
 	}
+	if !regexp.MustCompile(`^[A-Z0-9]+$`).MatchString(pairingCode) {
+		t.Fatalf("expected pairing code to be alphanumeric only, got %q", pairingCode)
+	}
 
 	completeReq := httptest.NewRequest(http.MethodPost, "/api/extension/pair/complete", bytes.NewReader([]byte(`{"pairing_code":"`+pairingCode+`","name":"Popup","browser":"chrome","platform":"macOS"}`)))
 	completeReq.Header.Set("Content-Type", "application/json")

@@ -1,11 +1,5 @@
-<p align="center">
-  <img src="docs/assets/knit-mark.png" alt="Knit icon" width="96" />
-</p>
-
-# Knit
-
-<p align="center">
-  <img src="docs/assets/knit-promo.png" alt="Knit workflow: you speak, Knit translates, agents build." width="880" />
+<p align="left">
+  <img src="docs/assets/knit-logo.png" alt="Knit icon" width="96" />
 </p>
 
 Knit is a local-first runtime that turns spoken and visual feedback on live software into structured change requests for coding agents.
@@ -13,6 +7,38 @@ Knit is a local-first runtime that turns spoken and visual feedback on live soft
 Knit sits between a running application and the systems you use to change it. Instead of asking people to write long tickets, annotate screenshots by hand, or reconstruct UI problems from memory, Knit lets them review software in context: point at the interface, speak about what should change, inspect the captured request, and send an approved package to a coding agent.
 
 The project is aimed at teams who want a tighter loop between live product review and implementation. Designers, PMs, QA, founders, and engineers can all describe software more naturally when they are looking at the real thing. Coding agents are useful, but they still need grounded intent. Knit is the layer that captures that intent in a way that is reviewable, structured, and safe to hand off.
+
+<p align="center">
+  <img src="docs/assets/knit-promo.png" alt="Knit workflow: you speak, Knit translates, agents build." width="880" />
+</p>
+
+## Get Started
+### Prerequisites
+
+- Go installed locally
+- A supported desktop environment for the local daemon and browser workflow
+- A coding agent you actually plan to send work to, configured before your first submit
+- Optional:
+  - Codex CLI or API access
+  - Claude Code-style CLI
+  - OpenCode-compatible CLI
+  - LM Studio
+  - Python 3 for managed faster-whisper bootstrap
+
+### Install and run the daemon
+
+```bash
+go run ./cmd/daemon
+```
+### Basic Session Flow
+
+1. Start the daemon.
+2. Open the local UI at `http://127.0.0.1:7777`.
+3. Start a review session and select your workspace (where your code lives).
+4. Capture feedback from the main UI, floating composer, or browser extension.
+5. Choose what the agent should do with the approved feedback.
+6. Preview the structured request.
+7. Approve and submit it to your configured adapter. You can watch the 'Queue and delivery" on the Main UI for your update to finish or just go queue another one
 
 ## The Problem
 
@@ -170,12 +196,15 @@ Quick start:
 
 - Go installed locally
 - A supported desktop environment for the local daemon and browser workflow
+- A coding agent you actually plan to send work to, configured before your first submit
 - Optional:
   - Codex CLI or API access
   - Claude Code-style CLI
   - OpenCode-compatible CLI
   - LM Studio
   - Python 3 for managed faster-whisper bootstrap
+
+Knit is meant to augment an existing coding workflow, not replace it. Before you start a review session, make sure your submit adapter, workspace, and any required API keys or CLI commands are configured in `Settings -> Agent`, `knit.toml`, or `.env`.
 
 ### Run The Daemon
 
@@ -211,11 +240,12 @@ go build -o ./dist/local/tray ./cmd/tray
 
 1. Start the daemon or tray.
 2. Open the local UI at `http://127.0.0.1:7777`.
-3. Start a review session.
-4. Capture feedback from the main UI, floating composer, or browser extension.
-5. Choose what the agent should do with the approved feedback.
-6. Preview the structured request.
-7. Approve and submit it to your configured adapter.
+3. Configure your coding agent, workspace, and provider credentials.
+4. Start a review session.
+5. Capture feedback from the main UI, floating composer, or browser extension.
+6. Choose what the agent should do with the approved feedback.
+7. Preview the structured request.
+8. Approve and submit it to your configured adapter.
 
 ### Configure Providers
 
