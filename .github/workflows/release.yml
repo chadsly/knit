@@ -114,7 +114,12 @@ jobs:
       - name: Package release artifacts
         env:
           VERSION: ${{ steps.release.outputs.version }}
-        run: ./scripts/package-release.sh ./dist-ci
+        run: |
+          if [[ ! -d "./dist-ci/bin" ]]; then
+            echo "dist-ci/bin missing before packaging; rebuilding release binaries"
+            ./scripts/build-cross-platform.sh ./dist-ci
+          fi
+          ./scripts/package-release.sh ./dist-ci
 
       - name: Verify release readiness
         shell: bash

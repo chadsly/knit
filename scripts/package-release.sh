@@ -63,7 +63,14 @@ write_release_manifest() {
 }
 
 echo "Packaging release artifacts from: $DIST_DIR/bin"
+if [[ ! -d "$DIST_DIR/bin" ]]; then
+  echo "missing build output directory: $DIST_DIR/bin" >&2
+  exit 1
+fi
+
+target_dir_count=0
 while IFS= read -r -d '' target_dir; do
+  target_dir_count=$((target_dir_count + 1))
   target_name="$(basename "$target_dir")"
   os="${target_name%%_*}"
   archive_base="knit_${VERSION}_${target_name}"
@@ -113,6 +120,11 @@ EOF
     fi
   fi
 done < <(find "$DIST_DIR/bin" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+
+if [[ "$target_dir_count" -eq 0 ]]; then
+  echo "no build target directories found under: $DIST_DIR/bin" >&2
+  exit 1
+fi
 
 for report in build-manifest.json sbom.spdx.json dependency-scan.json; do
   if [[ -f "$DIST_DIR/$report" ]]; then

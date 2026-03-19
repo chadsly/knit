@@ -147,6 +147,7 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 		"Release version must be a stable semantic version like 1.2.3.",
 		"Releases must be cut from the main branch.",
 		"Tag $tag already exists.",
+		"dist-ci/bin missing before packaging; rebuilding release binaries",
 		"npm publish --access public --tag latest --provenance",
 		"softprops/action-gh-release@v2",
 		"git tag -a \"$TAG\" -m \"Release $VERSION\"",

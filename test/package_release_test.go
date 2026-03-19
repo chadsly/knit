@@ -312,6 +312,28 @@ func TestReleaseReadinessCheckFailsForTaggedBuildWithoutSBOM(t *testing.T) {
 	}
 }
 
+func TestPackageReleaseScriptFailsClearlyWithoutBuildOutputs(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available")
+	}
+	distDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(distDir, "sbom.spdx.json"), []byte(`{"spdxVersion":"SPDX-2.3"}`), 0o644); err != nil {
+		t.Fatalf("write sbom: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(distDir, "dependency-scan.json"), []byte(`{"status":"ok"}`), 0o644); err != nil {
+		t.Fatalf("write dependency scan: %v", err)
+	}
+	cmd := exec.Command("bash", "../scripts/package-release.sh", distDir)
+	cmd.Env = append(os.Environ(), "VERSION=0.0.6-test")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected package script to fail when build outputs are missing")
+	}
+	if !strings.Contains(string(out), "missing build output directory") {
+		t.Fatalf("expected clear missing-build-output error, got:\n%s", string(out))
+	}
+}
+
 func TestBuildCrossPlatformScriptProducesBuildManifest(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
