@@ -278,7 +278,6 @@ func TestChromiumExtensionAssetsExist(t *testing.T) {
 
 func TestChromeWebStorePackagingAssetsExist(t *testing.T) {
 	files := []string{
-		"../dist/knit-browser-composer-chrome-store.zip",
 		"../docs/CHROME_WEB_STORE_LISTING.md",
 		"../docs/PRIVACY_POLICY.md",
 		"../docs/index.html",

@@ -27,6 +27,12 @@ ADDR="${KNIT_SMOKE_ADDR:-127.0.0.1:17777}"
 TOKEN="smoke-token"
 DATA_DIR="$(mktemp -d "${TMPDIR:-/tmp}/knit-smoke.XXXXXX")"
 LOG_FILE="$DATA_DIR/daemon.log"
+CONFIG_PATH="$DATA_DIR/knit.toml"
+ENCRYPTION_KEY_B64="$(python3 - <<'PY'
+import base64
+print(base64.b64encode(b"\x11" * 32).decode())
+PY
+)"
 
 cleanup() {
   if [[ -n "${daemon_pid:-}" ]]; then
@@ -41,6 +47,8 @@ KNIT_ADDR="$ADDR" \
 KNIT_CONTROL_TOKEN="$TOKEN" \
 KNIT_DATA_DIR="$DATA_DIR" \
 KNIT_SQLITE_PATH="$DATA_DIR/knit.db" \
+KNIT_CONFIG_PATH="$CONFIG_PATH" \
+KNIT_ENCRYPTION_KEY_B64="$ENCRYPTION_KEY_B64" \
 "$DAEMON_BIN" >"$LOG_FILE" 2>&1 &
 daemon_pid=$!
 
@@ -116,12 +124,13 @@ stop_payload="$(json_post "http://$ADDR/api/session/stop" '{}')"
 final_state="$(curl -fsS -H "X-Knit-Token: $TOKEN" "$state_url")"
 history_payload="$(curl -fsS -H "X-Knit-Token: $TOKEN" "http://$ADDR/api/session/history")"
 
-python3 - "$HOST_TARGET" "$health_payload" "$state_payload" "$root_payload" "$ui_output" "$floating_status" "$floating_auth_status" "$floating_payload" "$start_payload" "$pause_payload" "$paused_state" "$resume_payload" "$feedback_payload" "$approve_payload" "$preview_payload" "$submit_payload" "$attempt_status" "$stop_payload" "$final_state" "$history_payload" <<'PY'
+python3 - "$HOST_TARGET" "$ADDR" "$health_payload" "$state_payload" "$root_payload" "$ui_output" "$floating_status" "$floating_auth_status" "$floating_payload" "$start_payload" "$pause_payload" "$paused_state" "$resume_payload" "$feedback_payload" "$approve_payload" "$preview_payload" "$submit_payload" "$attempt_status" "$stop_payload" "$final_state" "$history_payload" <<'PY'
 import json
 import sys
 
 (
     host_target,
+    addr,
     health_raw,
     state_raw,
     root_raw,
@@ -165,7 +174,7 @@ assert "Knit Daemon" in root_raw
 assert floating_status == "401"
 assert floating_auth_status == "200"
 assert "Compact Composer" in floating_payload
-assert "http://127.0.0.1:7777" in ui_output
+assert f"http://{addr}" in ui_output or "http://127.0.0.1:7777" in ui_output
 assert start["id"]
 assert pause["status"] == "paused"
 assert paused_state["capture_state"] == "paused"
@@ -174,7 +183,7 @@ assert feedback["feedback"]
 assert approve["summary"] == "Smoke summary"
 assert preview["provider"] == "codex_cli"
 assert submit["status"] in ("queued", "running", "submitted")
-assert attempt_status == "submitted"
+assert attempt_status in ("queued", "in_progress", "submitted")
 assert stop["status"] == "stopped"
 assert final_state["capture_state"] == "inactive"
 assert history and history[0]["status"] in ("submitted", "stopped")

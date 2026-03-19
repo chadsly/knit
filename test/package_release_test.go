@@ -402,6 +402,7 @@ func TestRuntimeSmokeScriptPassesForHostBuild(t *testing.T) {
 		t.Fatalf("build script failed: %v\n%s", err, string(out))
 	}
 	smoke := exec.Command("bash", "../scripts/runtime-smoke.sh", distDir)
+	smoke.Env = append(os.Environ(), "KNIT_SMOKE_ADDR=127.0.0.1:17779")
 	if out, err := smoke.CombinedOutput(); err != nil {
 		t.Fatalf("runtime smoke failed: %v\n%s", err, string(out))
 	}
