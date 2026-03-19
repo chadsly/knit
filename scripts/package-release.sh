@@ -195,7 +195,7 @@ if [[ -d "$NPM_TEMPLATE_DIR" ]]; then
   done < <(find "$PKG_DIR" -maxdepth 2 -type f \( -name "*.tar.gz" -o -name "*.zip" \) -print0 | sort -z)
   echo " - created npm package scaffold at $npm_pkg_dir"
   if ! command -v npm >/dev/null 2>&1; then
-    echo "npm is required to pack @knit/daemon release artifacts" >&2
+    echo "npm is required to pack @chadsly/knit release artifacts" >&2
     exit 1
   fi
   (cd "$npm_pkg_dir" && npm pack --pack-destination "$PKG_DIR")

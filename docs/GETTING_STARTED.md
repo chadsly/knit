@@ -20,7 +20,7 @@ This guide is scoped to the current Knit repository: a local desktop daemon, tra
 
 Use one of these methods to install and start the daemon.
 
-Package-manager tabs below assume you are using the generated or published npm wrapper package named `@knit/daemon`. That wrapper installs the daemon on `npm install` and exposes it through the `knit` command.
+Package-manager tabs below assume you are using the generated or published npm wrapper package named `@chadsly/knit`. That wrapper installs the daemon on `npm install` and exposes it through the `knit` command.
 
 :::tabs
 @tab Go source
@@ -36,7 +36,7 @@ go run ./cmd/daemon
 Install the packaged daemon wrapper, then start it:
 
 ```bash
-npm install -g @knit/daemon
+npm install -g @chadsly/knit
 knit start
 ```
 
@@ -44,7 +44,7 @@ knit start
 Install the packaged daemon wrapper, then start it:
 
 ```bash
-pnpm add -g @knit/daemon
+pnpm add -g @chadsly/knit
 knit start
 ```
 
@@ -52,7 +52,7 @@ knit start
 Install the packaged daemon wrapper, then start it:
 
 ```bash
-yarn global add @knit/daemon
+yarn global add @chadsly/knit
 knit start
 ```
 
@@ -60,7 +60,7 @@ knit start
 Install the packaged daemon wrapper, then start it:
 
 ```bash
-bun add -g @knit/daemon
+bun add -g @chadsly/knit
 knit start
 ```
 :::
@@ -287,7 +287,7 @@ Stable GitHub/npm release:
 
 - Run the `Release` GitHub Actions workflow from the `main` branch.
 - Enter a stable semantic version like `0.1.0`.
-- The workflow validates the version, builds and signs the release artifacts, pushes the annotated tag `v0.1.0`, publishes `@knit/daemon` to npm, and creates the matching GitHub Release.
+- The workflow validates the version, builds and signs the release artifacts, pushes the annotated tag `v0.1.0`, publishes `@chadsly/knit` to npm, and creates the matching GitHub Release.
 
 Verification helpers:
 

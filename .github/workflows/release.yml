@@ -138,13 +138,13 @@ jobs:
           git tag -a "$TAG" -m "Release $VERSION"
           git push origin "$TAG"
 
-      - name: Publish @knit/daemon to npm
+      - name: Publish @chadsly/knit to npm
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ env.NPM_TOKEN_SECRET }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
-          npm publish --access public --tag latest --provenance dist-ci/packages/knit-daemon-${VERSION}.tgz
+          npm publish --access public --tag latest --provenance dist-ci/packages/chadsly-knit-${VERSION}.tgz
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

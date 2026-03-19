@@ -1408,7 +1408,7 @@ func TestDocsViewEndpointReturnsLocalDocContent(t *testing.T) {
 		t.Fatalf("expected getting started markdown to include browser extension screenshots, got %q", content)
 	}
 	contentHTML, _ := payload["content_html"].(string)
-	if !strings.Contains(contentHTML, "<h1 id=\"getting-started\">Getting Started</h1>") || !strings.Contains(contentHTML, "<h2 id=\"what-runs\">What Runs</h2>") || !strings.Contains(contentHTML, "class=\"doc-tabs\"") || !strings.Contains(contentHTML, "class=\"doc-image\"") || !strings.Contains(contentHTML, "/docs/assets/browser-extension-pairing-code.png") || !strings.Contains(contentHTML, "@knit/daemon") || !strings.Contains(contentHTML, "<pre class=\"doc-code\"><code>") {
+	if !strings.Contains(contentHTML, "<h1 id=\"getting-started\">Getting Started</h1>") || !strings.Contains(contentHTML, "<h2 id=\"what-runs\">What Runs</h2>") || !strings.Contains(contentHTML, "class=\"doc-tabs\"") || !strings.Contains(contentHTML, "class=\"doc-image\"") || !strings.Contains(contentHTML, "/docs/assets/browser-extension-pairing-code.png") || !strings.Contains(contentHTML, "@chadsly/knit") || !strings.Contains(contentHTML, "<pre class=\"doc-code\"><code>") {
 		t.Fatalf("expected rendered markdown html, got %q", contentHTML)
 	}
 	headings, _ := payload["headings"].([]any)

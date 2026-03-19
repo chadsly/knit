@@ -63,7 +63,7 @@ func TestPackageReleaseScriptProducesArchivesAndChecksums(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(pkgDir, "npm", "knit-daemon", "package.json")); err != nil {
 		t.Fatalf("expected npm package scaffold: %v", err)
 	}
-	npmTarballs, err := filepath.Glob(filepath.Join(pkgDir, "knit-daemon-*.tgz"))
+	npmTarballs, err := filepath.Glob(filepath.Join(pkgDir, "chadsly-knit-*.tgz"))
 	if err != nil {
 		t.Fatalf("glob npm tarballs: %v", err)
 	}
@@ -81,8 +81,8 @@ func TestPackageReleaseScriptProducesArchivesAndChecksums(t *testing.T) {
 	if err := json.Unmarshal(rawPkg, &pkgJSON); err != nil {
 		t.Fatalf("decode npm package.json: %v", err)
 	}
-	if pkgJSON["name"] != "@knit/daemon" {
-		t.Fatalf("expected npm package name @knit/daemon, got %#v", pkgJSON["name"])
+	if pkgJSON["name"] != "@chadsly/knit" {
+		t.Fatalf("expected npm package name @chadsly/knit, got %#v", pkgJSON["name"])
 	}
 	if pkgJSON["license"] != "MIT" {
 		t.Fatalf("expected npm package license MIT, got %#v", pkgJSON["license"])

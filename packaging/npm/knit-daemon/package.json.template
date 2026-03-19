@@ -1,5 +1,5 @@
 {
-  "name": "@knit/daemon",
+  "name": "@chadsly/knit",
   "version": "__VERSION__",
   "description": "Install and run the local Knit daemon from bundled release artifacts.",
   "license": "MIT",

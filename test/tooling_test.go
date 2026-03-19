@@ -150,7 +150,7 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 		"Releases must be cut from the main branch.",
 		"Tag $tag already exists.",
 		"dist-ci/bin missing before packaging; rebuilding release binaries",
-		"npm publish --access public --tag latest --provenance",
+		"npm publish --access public --tag latest --provenance dist-ci/packages/chadsly-knit-${VERSION}.tgz",
 		"softprops/action-gh-release@v2",
 		"git tag -a \"$TAG\" -m \"Release $VERSION\"",
 		"git push origin \"$TAG\"",

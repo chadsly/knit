@@ -1,11 +1,11 @@
-# `@knit/daemon`
+# `@chadsly/knit`
 
-`@knit/daemon` installs the host-specific Knit daemon from bundled release artifacts and exposes it through the `knit` command.
+`@chadsly/knit` installs the host-specific Knit daemon from bundled release artifacts and exposes it through the `knit` command.
 
 Install:
 
 ```bash
-npm install -g @knit/daemon
+npm install -g @chadsly/knit
 ```
 
 Start Knit:

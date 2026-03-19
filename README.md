@@ -276,7 +276,7 @@ When you run Knit from the repository, the runtime auto-fills the bundled wrappe
 If you install the packaged npm wrapper instead, use:
 
 ```bash
-npm install -g @knit/daemon
+npm install -g @chadsly/knit
 knit start
 ```
 
