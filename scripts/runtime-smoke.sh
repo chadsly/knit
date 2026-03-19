@@ -124,46 +124,92 @@ stop_payload="$(json_post "http://$ADDR/api/session/stop" '{}')"
 final_state="$(curl -fsS -H "X-Knit-Token: $TOKEN" "$state_url")"
 history_payload="$(curl -fsS -H "X-Knit-Token: $TOKEN" "http://$ADDR/api/session/history")"
 
-python3 - "$HOST_TARGET" "$ADDR" "$health_payload" "$state_payload" "$root_payload" "$ui_output" "$floating_status" "$floating_auth_status" "$floating_payload" "$start_payload" "$pause_payload" "$paused_state" "$resume_payload" "$feedback_payload" "$approve_payload" "$preview_payload" "$submit_payload" "$attempt_status" "$stop_payload" "$final_state" "$history_payload" <<'PY'
+health_file="$DATA_DIR/health.json"
+state_file="$DATA_DIR/state.json"
+root_file="$DATA_DIR/root.html"
+ui_file="$DATA_DIR/ui.txt"
+floating_status_file="$DATA_DIR/floating_status.txt"
+floating_auth_status_file="$DATA_DIR/floating_auth_status.txt"
+floating_file="$DATA_DIR/floating.html"
+start_file="$DATA_DIR/start.json"
+pause_file="$DATA_DIR/pause.json"
+paused_state_file="$DATA_DIR/paused_state.json"
+resume_file="$DATA_DIR/resume.json"
+feedback_file="$DATA_DIR/feedback.json"
+approve_file="$DATA_DIR/approve.json"
+preview_file="$DATA_DIR/preview.json"
+submit_file="$DATA_DIR/submit.json"
+attempt_status_file="$DATA_DIR/attempt_status.txt"
+stop_file="$DATA_DIR/stop.json"
+final_state_file="$DATA_DIR/final_state.json"
+history_file="$DATA_DIR/history.json"
+
+printf '%s' "$health_payload" > "$health_file"
+printf '%s' "$state_payload" > "$state_file"
+printf '%s' "$root_payload" > "$root_file"
+printf '%s' "$ui_output" > "$ui_file"
+printf '%s' "$floating_status" > "$floating_status_file"
+printf '%s' "$floating_auth_status" > "$floating_auth_status_file"
+printf '%s' "$floating_payload" > "$floating_file"
+printf '%s' "$start_payload" > "$start_file"
+printf '%s' "$pause_payload" > "$pause_file"
+printf '%s' "$paused_state" > "$paused_state_file"
+printf '%s' "$resume_payload" > "$resume_file"
+printf '%s' "$feedback_payload" > "$feedback_file"
+printf '%s' "$approve_payload" > "$approve_file"
+printf '%s' "$preview_payload" > "$preview_file"
+printf '%s' "$submit_payload" > "$submit_file"
+printf '%s' "$attempt_status" > "$attempt_status_file"
+printf '%s' "$stop_payload" > "$stop_file"
+printf '%s' "$final_state" > "$final_state_file"
+printf '%s' "$history_payload" > "$history_file"
+
+python3 - "$HOST_TARGET" "$ADDR" "$health_file" "$state_file" "$root_file" "$ui_file" "$floating_status_file" "$floating_auth_status_file" "$floating_file" "$start_file" "$pause_file" "$paused_state_file" "$resume_file" "$feedback_file" "$approve_file" "$preview_file" "$submit_file" "$attempt_status_file" "$stop_file" "$final_state_file" "$history_file" <<'PY'
 import json
 import sys
 
 (
     host_target,
     addr,
-    health_raw,
-    state_raw,
-    root_raw,
-    ui_output,
-    floating_status,
-    floating_auth_status,
-    floating_payload,
-    start_raw,
-    pause_raw,
-    paused_state_raw,
-    resume_raw,
-    feedback_raw,
-    approve_raw,
-    preview_raw,
-    submit_raw,
-    attempt_status,
-    stop_raw,
-    final_state_raw,
-    history_raw,
+    health_path,
+    state_path,
+    root_path,
+    ui_path,
+    floating_status_path,
+    floating_auth_status_path,
+    floating_path,
+    start_path,
+    pause_path,
+    paused_state_path,
+    resume_path,
+    feedback_path,
+    approve_path,
+    preview_path,
+    submit_path,
+    attempt_status_path,
+    stop_path,
+    final_state_path,
+    history_path,
 ) = sys.argv[1:]
-health = json.loads(health_raw)
-state = json.loads(state_raw)
-start = json.loads(start_raw)
-pause = json.loads(pause_raw)
-paused_state = json.loads(paused_state_raw)
-resume = json.loads(resume_raw)
-feedback = json.loads(feedback_raw)
-approve = json.loads(approve_raw)
-preview = json.loads(preview_raw)
-submit = json.loads(submit_raw)
-stop = json.loads(stop_raw)
-final_state = json.loads(final_state_raw)
-history = json.loads(history_raw)
+health = json.loads(open(health_path, encoding="utf-8").read())
+state = json.loads(open(state_path, encoding="utf-8").read())
+root_raw = open(root_path, encoding="utf-8").read()
+ui_output = open(ui_path, encoding="utf-8").read()
+floating_status = open(floating_status_path, encoding="utf-8").read()
+floating_auth_status = open(floating_auth_status_path, encoding="utf-8").read()
+floating_payload = open(floating_path, encoding="utf-8").read()
+start = json.loads(open(start_path, encoding="utf-8").read())
+pause = json.loads(open(pause_path, encoding="utf-8").read())
+paused_state = json.loads(open(paused_state_path, encoding="utf-8").read())
+resume = json.loads(open(resume_path, encoding="utf-8").read())
+feedback = json.loads(open(feedback_path, encoding="utf-8").read())
+approve = json.loads(open(approve_path, encoding="utf-8").read())
+preview = json.loads(open(preview_path, encoding="utf-8").read())
+submit = json.loads(open(submit_path, encoding="utf-8").read())
+attempt_status = open(attempt_status_path, encoding="utf-8").read()
+stop = json.loads(open(stop_path, encoding="utf-8").read())
+final_state = json.loads(open(final_state_path, encoding="utf-8").read())
+history = json.loads(open(history_path, encoding="utf-8").read())
 
 assert health["ok"] is True
 assert state["runtime_platform"]["host_target"] == host_target
