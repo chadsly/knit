@@ -1,0 +1,146 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable semantic version to release, for example 0.2.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  GOFLAGS: -mod=readonly
+
+jobs:
+  release:
+    name: Cut Release
+    runs-on: ubuntu-latest
+    env:
+      NPM_TOKEN_SECRET: ${{ secrets.NPM_TOKEN }}
+      RELEASE_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+      RELEASE_SIGNING_PUBLIC_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Validate release inputs
+        id: release
+        shell: bash
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "Releases must be cut from the main branch."
+            exit 1
+          fi
+          version="${VERSION_INPUT}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release version must be a stable semantic version like 1.2.3."
+            exit 1
+          fi
+          tag="v$version"
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists."
+            exit 1
+          fi
+          if git ls-remote --tags origin "refs/tags/$tag" | grep -q "$tag"; then
+            echo "Remote tag $tag already exists."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure release secrets are configured
+        shell: bash
+        run: |
+          if [[ -z "${NPM_TOKEN_SECRET}" ]]; then
+            echo "NPM_TOKEN secret is required for stable npm releases."
+            exit 1
+          fi
+          if [[ -z "${RELEASE_SIGNING_PRIVATE_KEY_SECRET}" || -z "${RELEASE_SIGNING_PUBLIC_KEY_SECRET}" ]]; then
+            echo "Release signing secrets are required for stable releases."
+            exit 1
+          fi
+
+      - name: Run Go test suite
+        run: go test ./...
+
+      - name: Build cross-platform binaries
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: ./scripts/build-cross-platform.sh ./dist-ci
+
+      - name: Generate SBOM
+        run: ./scripts/generate-sbom.sh ./dist-ci/sbom.spdx.json
+
+      - name: Run dependency scan
+        run: ./scripts/dependency-scan.sh ./dist-ci/dependency-scan.json
+
+      - name: Materialize signing keys
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ env.RELEASE_SIGNING_PRIVATE_KEY_SECRET }}
+          PUBLIC_KEY: ${{ env.RELEASE_SIGNING_PUBLIC_KEY_SECRET }}
+        run: |
+          private_key_path="$RUNNER_TEMP/release-private.pem"
+          printf '%s\n' "$PRIVATE_KEY" > "$private_key_path"
+          chmod 600 "$private_key_path"
+          echo "RELEASE_SIGNING_PRIVATE_KEY=$private_key_path" >> "$GITHUB_ENV"
+          public_key_path="$RUNNER_TEMP/release-public.pem"
+          printf '%s\n' "$PUBLIC_KEY" > "$public_key_path"
+          chmod 600 "$public_key_path"
+          echo "RELEASE_SIGNING_PUBLIC_KEY=$public_key_path" >> "$GITHUB_ENV"
+
+      - name: Package release artifacts
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: ./scripts/package-release.sh ./dist-ci
+
+      - name: Verify release readiness
+        shell: bash
+        env:
+          CI_COMMIT_TAG: ${{ steps.release.outputs.tag }}
+        run: ./scripts/release-readiness-check.sh ./dist-ci/packages
+
+      - name: Create annotated release tag
+        shell: bash
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Release $VERSION"
+          git push origin "$TAG"
+
+      - name: Publish @knit/daemon to npm
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NPM_TOKEN_SECRET }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          npm publish --access public --tag latest --provenance dist-ci/packages/knit-daemon-${VERSION}.tgz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            dist-ci/packages/**

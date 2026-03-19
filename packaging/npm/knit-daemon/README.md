@@ -1,11 +1,34 @@
-# Knit Daemon npm Package
+# `@knit/daemon`
 
-This package installs the host-specific Knit daemon and UI binaries from the packaged release artifacts bundled inside the package.
+`@knit/daemon` installs the host-specific Knit daemon from bundled release artifacts and exposes it through the `knit` command.
 
-Commands:
+Install:
 
-- `npx knit-daemon start`
-- `npx knit-daemon path`
-- `npx knit-daemon version`
+```bash
+npm install -g @knit/daemon
+```
 
-The install step verifies the selected archive against the bundled release manifest before extraction.
+Start Knit:
+
+```bash
+knit start
+```
+
+Other commands:
+
+- `knit path`
+- `knit version`
+
+What happens on install:
+
+- `postinstall` selects the archive for the current OS and CPU
+- verifies it against the bundled release manifest
+- extracts the native daemon into the package runtime directory
+
+Supported platforms:
+
+- macOS: `x64`, `arm64`
+- Linux: `x64`, `arm64`
+- Windows: `x64`
+
+When you run `knit start`, the native daemon prints the local UI URL. Knit’s browser extension and main review UI still live outside this npm wrapper; this package is only the daemon/runtime install path.

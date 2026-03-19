@@ -14,6 +14,9 @@ func TestPackageReleaseScriptProducesArchivesAndChecksums(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
 	}
+	if _, err := exec.LookPath("npm"); err != nil {
+		t.Skip("npm not available")
+	}
 
 	distDir := prepareFakeDist(t)
 	writeReleaseInputs(t, distDir)
@@ -60,6 +63,37 @@ func TestPackageReleaseScriptProducesArchivesAndChecksums(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(pkgDir, "npm", "knit-daemon", "package.json")); err != nil {
 		t.Fatalf("expected npm package scaffold: %v", err)
 	}
+	npmTarballs, err := filepath.Glob(filepath.Join(pkgDir, "knit-daemon-*.tgz"))
+	if err != nil {
+		t.Fatalf("glob npm tarballs: %v", err)
+	}
+	if len(npmTarballs) != 1 {
+		t.Fatalf("expected one npm tarball, got %#v", npmTarballs)
+	}
+	if !strings.Contains(string(checksums), ".tgz") {
+		t.Fatalf("expected npm tarball checksum, got:\n%s", string(checksums))
+	}
+	rawPkg, err := os.ReadFile(filepath.Join(pkgDir, "npm", "knit-daemon", "package.json"))
+	if err != nil {
+		t.Fatalf("read npm package.json: %v", err)
+	}
+	var pkgJSON map[string]any
+	if err := json.Unmarshal(rawPkg, &pkgJSON); err != nil {
+		t.Fatalf("decode npm package.json: %v", err)
+	}
+	if pkgJSON["name"] != "@knit/daemon" {
+		t.Fatalf("expected npm package name @knit/daemon, got %#v", pkgJSON["name"])
+	}
+	if pkgJSON["license"] != "MIT" {
+		t.Fatalf("expected npm package license MIT, got %#v", pkgJSON["license"])
+	}
+	bin, _ := pkgJSON["bin"].(map[string]any)
+	if got := bin["knit"]; got != "bin/knit-daemon.js" {
+		t.Fatalf("expected knit bin entry, got %#v", pkgJSON["bin"])
+	}
+	if _, ok := bin["knit-daemon"]; ok {
+		t.Fatalf("did not expect knit-daemon bin alias in npm package")
+	}
 }
 
 func TestPackageReleaseScriptBuildsSelfContainedNpmPackage(t *testing.T) {
@@ -90,6 +124,15 @@ func TestPackageReleaseScriptBuildsSelfContainedNpmPackage(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(npmPkgDir, "artifacts", "release-manifest.json")); err != nil {
 		t.Fatalf("expected bundled release manifest: %v", err)
+	}
+	start := exec.Command("node", "./bin/knit-daemon.js", "version")
+	start.Dir = npmPkgDir
+	out, err := start.CombinedOutput()
+	if err != nil {
+		t.Fatalf("npm bin version command failed: %v\n%s", err, string(out))
+	}
+	if strings.TrimSpace(string(out)) != "0.0.0-test" {
+		t.Fatalf("expected npm bin version output, got %q", strings.TrimSpace(string(out)))
 	}
 }
 

@@ -266,6 +266,13 @@ See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for the full environment 
 
 When you run Knit from the repository, the runtime auto-fills the bundled wrapper scripts in `scripts/` for `codex_cli`, `claude_cli`, and `opencode_cli` if those command fields are blank.
 
+If you install the packaged npm wrapper instead, use:
+
+```bash
+npm install -g @knit/daemon
+knit start
+```
+
 ## Configuration
 
 Knit now has two explicit config surfaces:
@@ -386,6 +393,4 @@ The project is most useful when contributions make the feedback loop tighter, sa
 
 ## License
 
-License is not finalized yet.
-
-Current packaging metadata is marked `UNLICENSED`. Add the repository’s final open-source license before publishing broadly.
+Knit is released under the [MIT License](LICENSE).

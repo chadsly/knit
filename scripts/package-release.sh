@@ -22,6 +22,46 @@ hash_file() {
   fi
 }
 
+write_checksums() {
+  local checksums_path="$1"
+  rm -f "$checksums_path"
+  while IFS= read -r -d '' pkg_file; do
+    hash_file "$pkg_file" >> "$checksums_path"
+  done < <(find "$PKG_DIR" -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.tgz" -o -name "*.install.sh" -o -name "*.install.command" -o -name "*.install.ps1" \) -print0 | sort -z)
+  echo " - created $checksums_path"
+}
+
+write_release_manifest() {
+  local manifest_path="$1"
+  local checksums_path="$2"
+  {
+    echo "{"
+    echo "  \"version\": \"${VERSION}\","
+    echo "  \"source_date_epoch\": \"${SOURCE_DATE_EPOCH}\","
+    echo "  \"checksums_file\": \"checksums.txt\","
+    echo "  \"signed_checksums\": $( [[ -f "$PKG_DIR/checksums.sig" ]] && echo "true" || echo "false" ),"
+    echo "  \"has_build_manifest\": $( [[ -f "$PKG_DIR/build-manifest.json" ]] && echo "true" || echo "false" ),"
+    echo "  \"has_sbom\": $( [[ -f "$PKG_DIR/sbom.spdx.json" ]] && echo "true" || echo "false" ),"
+    echo "  \"has_dependency_scan\": $( [[ -f "$PKG_DIR/dependency-scan.json" ]] && echo "true" || echo "false" ),"
+    echo "  \"artifacts\": ["
+    first_artifact=1
+    while read -r sum file; do
+      [[ -z "${sum:-}" ]] && continue
+      [[ -z "${file:-}" ]] && continue
+      if [[ $first_artifact -eq 0 ]]; then
+        echo ","
+      fi
+      first_artifact=0
+      rel="${file#$PKG_DIR/}"
+      printf '    {"sha256":"%s","path":"%s"}' "$sum" "$rel"
+    done < "$checksums_path"
+    echo
+    echo "  ]"
+    echo "}"
+  } > "$manifest_path"
+  echo " - created $manifest_path"
+}
+
 echo "Packaging release artifacts from: $DIST_DIR/bin"
 while IFS= read -r -d '' target_dir; do
   target_name="$(basename "$target_dir")"
@@ -74,19 +114,15 @@ EOF
   fi
 done < <(find "$DIST_DIR/bin" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 
-pkg_checksums="$PKG_DIR/checksums.txt"
-rm -f "$pkg_checksums"
-while IFS= read -r -d '' pkg_file; do
-  hash_file "$pkg_file" >> "$pkg_checksums"
-done < <(find "$PKG_DIR" -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.install.sh" -o -name "*.install.command" -o -name "*.install.ps1" \) -print0 | sort -z)
-echo " - created $pkg_checksums"
-
 for report in build-manifest.json sbom.spdx.json dependency-scan.json; do
   if [[ -f "$DIST_DIR/$report" ]]; then
     cp "$DIST_DIR/$report" "$PKG_DIR/$report"
     echo " - copied $PKG_DIR/$report"
   fi
 done
+
+pkg_checksums="$PKG_DIR/checksums.txt"
+write_checksums "$pkg_checksums"
 
 if [[ -n "${MACOS_SIGN_IDENTITY:-}" ]]; then
   echo "Signing macOS binaries with identity: $MACOS_SIGN_IDENTITY"
@@ -114,32 +150,7 @@ if [[ -n "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]]; then
 fi
 
 release_manifest="$PKG_DIR/release-manifest.json"
-{
-  echo "{"
-  echo "  \"version\": \"${VERSION}\","
-  echo "  \"source_date_epoch\": \"${SOURCE_DATE_EPOCH}\","
-  echo "  \"checksums_file\": \"checksums.txt\","
-  echo "  \"signed_checksums\": $( [[ -f "$PKG_DIR/checksums.sig" ]] && echo "true" || echo "false" ),"
-  echo "  \"has_build_manifest\": $( [[ -f "$PKG_DIR/build-manifest.json" ]] && echo "true" || echo "false" ),"
-  echo "  \"has_sbom\": $( [[ -f "$PKG_DIR/sbom.spdx.json" ]] && echo "true" || echo "false" ),"
-  echo "  \"has_dependency_scan\": $( [[ -f "$PKG_DIR/dependency-scan.json" ]] && echo "true" || echo "false" ),"
-  echo "  \"artifacts\": ["
-  first_artifact=1
-  while read -r sum file; do
-    [[ -z "${sum:-}" ]] && continue
-    [[ -z "${file:-}" ]] && continue
-    if [[ $first_artifact -eq 0 ]]; then
-      echo ","
-    fi
-    first_artifact=0
-    rel="${file#$PKG_DIR/}"
-    printf '    {"sha256":"%s","path":"%s"}' "$sum" "$rel"
-  done < "$pkg_checksums"
-  echo
-  echo "  ]"
-  echo "}"
-} > "$release_manifest"
-echo " - created $release_manifest"
+write_release_manifest "$release_manifest" "$pkg_checksums"
 
 if [[ -n "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]]; then
   manifest_sig="$PKG_DIR/release-manifest.sig"
@@ -171,6 +182,34 @@ if [[ -d "$NPM_TEMPLATE_DIR" ]]; then
     cp "$artifact_file" "$npm_pkg_dir/artifacts/$rel"
   done < <(find "$PKG_DIR" -maxdepth 2 -type f \( -name "*.tar.gz" -o -name "*.zip" \) -print0 | sort -z)
   echo " - created npm package scaffold at $npm_pkg_dir"
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm is required to pack @knit/daemon release artifacts" >&2
+    exit 1
+  fi
+  (cd "$npm_pkg_dir" && npm pack --pack-destination "$PKG_DIR")
+  echo " - created npm package tarball in $PKG_DIR"
+  rm -f "$PKG_DIR/checksums.sig" "$PKG_DIR/release-manifest.sig"
+  write_checksums "$pkg_checksums"
+  if [[ -n "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]]; then
+    echo "Re-signing package checksums after npm tarball generation."
+    sig_file="$PKG_DIR/checksums.sig"
+    openssl dgst -sha256 -sign "$RELEASE_SIGNING_PRIVATE_KEY" -out "$sig_file" "$pkg_checksums"
+    echo " - created $sig_file"
+    if [[ -n "${RELEASE_SIGNING_PUBLIC_KEY:-}" ]]; then
+      openssl dgst -sha256 -verify "$RELEASE_SIGNING_PUBLIC_KEY" -signature "$sig_file" "$pkg_checksums"
+      echo " - verified signature with public key"
+    fi
+  fi
+  write_release_manifest "$release_manifest" "$pkg_checksums"
+  if [[ -n "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]]; then
+    manifest_sig="$PKG_DIR/release-manifest.sig"
+    openssl dgst -sha256 -sign "$RELEASE_SIGNING_PRIVATE_KEY" -out "$manifest_sig" "$release_manifest"
+    echo " - created $manifest_sig"
+    if [[ -n "${RELEASE_SIGNING_PUBLIC_KEY:-}" ]]; then
+      openssl dgst -sha256 -verify "$RELEASE_SIGNING_PUBLIC_KEY" -signature "$manifest_sig" "$release_manifest"
+      echo " - verified release manifest signature with public key"
+    fi
+  fi
 fi
 
 echo "Packaging complete. Output: $PKG_DIR"

@@ -69,6 +69,12 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 	if _, err := os.Stat("../.github/workflows/ci.yml"); err != nil {
 		t.Fatalf("expected GitHub Actions workflow: %v", err)
 	}
+	if _, err := os.Stat("../.github/workflows/release.yml"); err != nil {
+		t.Fatalf("expected release workflow: %v", err)
+	}
+	if _, err := os.Stat("../LICENSE"); err != nil {
+		t.Fatalf("expected repository license file: %v", err)
+	}
 	if _, err := os.Stat("../.gitlab-ci.yml"); !os.IsNotExist(err) {
 		t.Fatalf("expected .gitlab-ci.yml to be removed, got err=%v", err)
 	}
@@ -79,6 +85,7 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 	workflow := string(raw)
 	required := []string{
 		"name: CI",
+		"branches:",
 		"unit-tests:",
 		"workflow-reliability-gate:",
 		"performance-gate:",
@@ -87,6 +94,9 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 		"sbom:",
 		"vulnerability-scan:",
 		"release-signature-verify:",
+		"actions/setup-node@",
+		"version=\"0.0.0-ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}\"",
+		"version=\"${GITHUB_REF_NAME#v}\"",
 	}
 	for _, fragment := range required {
 		if !strings.Contains(workflow, fragment) {
@@ -102,6 +112,17 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 			t.Fatalf("did not expect workflow to reference secrets directly in if expressions: %q", fragment)
 		}
 	}
+	disallowedWorkflowFragments := []string{
+		"publish-npm-main:",
+		"create-github-release-main:",
+		"npm publish --access public --tag main --provenance",
+		"version=\"0.0.0-main.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}\"",
+	}
+	for _, fragment := range disallowedWorkflowFragments {
+		if strings.Contains(workflow, fragment) {
+			t.Fatalf("did not expect CI workflow fragment %q", fragment)
+		}
+	}
 	requiredEnvFragments := []string{
 		"RELEASE_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}",
 		"RELEASE_SIGNING_PUBLIC_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}",
@@ -111,6 +132,30 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 	for _, fragment := range requiredEnvFragments {
 		if !strings.Contains(workflow, fragment) {
 			t.Fatalf("expected workflow fragment %q", fragment)
+		}
+	}
+
+	releaseRaw, err := os.ReadFile("../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatalf("read release workflow: %v", err)
+	}
+	releaseWorkflow := string(releaseRaw)
+	releaseRequired := []string{
+		"name: Release",
+		"workflow_dispatch:",
+		"version:",
+		"Release version must be a stable semantic version like 1.2.3.",
+		"Releases must be cut from the main branch.",
+		"Tag $tag already exists.",
+		"npm publish --access public --tag latest --provenance",
+		"softprops/action-gh-release@v2",
+		"git tag -a \"$TAG\" -m \"Release $VERSION\"",
+		"git push origin \"$TAG\"",
+		"CI_COMMIT_TAG: ${{ steps.release.outputs.tag }}",
+	}
+	for _, fragment := range releaseRequired {
+		if !strings.Contains(releaseWorkflow, fragment) {
+			t.Fatalf("expected release workflow fragment %q", fragment)
 		}
 	}
 }

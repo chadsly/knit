@@ -2,6 +2,8 @@ name: CI
 
 on:
   push:
+    branches:
+      - "**"
   pull_request:
   workflow_dispatch:
 
@@ -66,9 +68,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            version="${GITHUB_REF_NAME}"
+            version="${GITHUB_REF_NAME#v}"
           else
-            version="${GITHUB_SHA::7}"
+            version="0.0.0-ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Build cross-platform binaries
@@ -122,6 +124,8 @@ jobs:
       - build-matrix
       - sbom
       - vulnerability-scan
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
     env:
       RELEASE_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
       RELEASE_SIGNING_PUBLIC_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
@@ -130,6 +134,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -150,9 +157,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            version="${GITHUB_REF_NAME}"
+            version="${GITHUB_REF_NAME#v}"
           else
-            version="${GITHUB_SHA::7}"
+            version="0.0.0-ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - name: Materialize signing keys
@@ -191,6 +198,9 @@ jobs:
       RELEASE_SIGNING_PUBLIC_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
       - name: Download packaged release artifacts
         uses: actions/download-artifact@v4
         with:

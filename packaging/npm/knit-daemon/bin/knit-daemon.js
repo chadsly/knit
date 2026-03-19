@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const { ensureInstalled, runtimeDirForPackage, daemonBinaryPath, packageRoot } = require("../lib/install");
 
 function usage() {
-  process.stdout.write("Usage: knit-daemon <start|path|version|install> [args...]\n");
+  process.stdout.write("Usage: knit <start|path|version> [args...]\n");
 }
 
 function main() {
@@ -18,11 +18,6 @@ function main() {
   if (command === "path") {
     ensureInstalled();
     process.stdout.write(daemonBinaryPath(runtimeDirForPackage()) + "\n");
-    return;
-  }
-  if (command === "install") {
-    ensureInstalled(true);
-    process.stdout.write(runtimeDirForPackage() + "\n");
     return;
   }
   if (command !== "start") {

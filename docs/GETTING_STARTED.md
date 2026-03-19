@@ -20,7 +20,7 @@ This guide is scoped to the current Knit repository: a local desktop daemon, tra
 
 Use one of these methods to install and start the daemon.
 
-Package-manager tabs below assume you are using the generated or published npm wrapper package named `@knit/daemon`. That wrapper installs and starts the daemon binary only.
+Package-manager tabs below assume you are using the generated or published npm wrapper package named `@knit/daemon`. That wrapper installs the daemon on `npm install` and exposes it through the `knit` command.
 
 :::tabs
 @tab Go source
@@ -37,7 +37,7 @@ Install the packaged daemon wrapper, then start it:
 
 ```bash
 npm install -g @knit/daemon
-knit-daemon start
+knit start
 ```
 
 @tab pnpm
@@ -45,7 +45,7 @@ Install the packaged daemon wrapper, then start it:
 
 ```bash
 pnpm add -g @knit/daemon
-knit-daemon start
+knit start
 ```
 
 @tab yarn
@@ -53,7 +53,7 @@ Install the packaged daemon wrapper, then start it:
 
 ```bash
 yarn global add @knit/daemon
-knit-daemon start
+knit start
 ```
 
 @tab bun
@@ -61,7 +61,7 @@ Install the packaged daemon wrapper, then start it:
 
 ```bash
 bun add -g @knit/daemon
-knit-daemon start
+knit start
 ```
 :::
 
@@ -274,6 +274,12 @@ Release packaging:
 VERSION=0.1.0 ./scripts/package-release.sh
 ```
 
+Stable GitHub/npm release:
+
+- Run the `Release` GitHub Actions workflow from the `main` branch.
+- Enter a stable semantic version like `0.1.0`.
+- The workflow validates the version, builds and signs the release artifacts, pushes the annotated tag `v0.1.0`, publishes `@knit/daemon` to npm, and creates the matching GitHub Release.
+
 Verification helpers:
 
 ```bash
@@ -284,7 +290,7 @@ Verification helpers:
 ./scripts/perf-gate.sh
 ```
 
-The release scripts emit portable archives, platform installer helpers, release metadata, and the npm wrapper scaffold under `packaging/npm/knit-daemon/`.
+The release scripts emit portable archives, platform installer helpers, release metadata, a generated npm wrapper scaffold under `packages/npm/knit-daemon/`, and a packed npm tarball ready for `npm publish`.
 
 ## Troubleshooting
 
