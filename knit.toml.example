@@ -9,18 +9,22 @@
 # build_id = ""
 # version_pin = ""
 # managed_deployment_id = ""
+# allowed: faster_whisper, local, lmstudio, remote
 # transcription_mode = "faster_whisper"
 # allow_remote_stt = true
 # allow_remote_submit = true
+# allowed: capture, submit, config, config_read, purge, read, logs, *
 # control_capabilities = ["capture", "submit", "config", "purge", "read"]
 # config_locked = false
 # capture_settings_locked = false
 # window_scoped_capture = true
 # browser_app_first = true
+# allowed today: native_tray_plus_local_web_ui
 # ui_runtime = "native_tray_plus_local_web_ui"
 # auto_start_enabled = false
 # pointer_sample_hz = 30
 # video_enabled_default = false
+# allowed: event_triggered, on_demand, continuous
 # video_mode = "event_triggered"
 # audio_retention = "0s"
 # screenshot_retention = "336h0m0s"
@@ -32,10 +36,12 @@
 # artifact_max_files = 2000
 # outbound_allowlist = []
 # blocked_targets = []
+# choose from: codex_cli, claude_cli, opencode_cli, codex_api, claude_api
 # allowed_submit_providers = []
 # siem_log_path = ""
 
 [runtime_codex]
+# choose from: codex_cli, claude_cli, opencode_cli, codex_api, claude_api
 # default_provider = "codex_cli"
 # cli_adapter_cmd = ""
 # cli_timeout_seconds = 600
@@ -43,10 +49,13 @@
 # claude_cli_timeout_seconds = 600
 # opencode_cli_adapter_cmd = ""
 # opencode_cli_timeout_seconds = 600
+# allowed: series, parallel
 # submit_execution_mode = "series"
 # codex_workdir = ""
 # codex_output_dir = ""
+# allowed: read-only, workspace-write, danger-full-access
 # codex_sandbox = "workspace-write"
+# allowed: untrusted, on-request, never
 # codex_approval_policy = "never"
 # codex_profile = ""
 # codex_model = ""
@@ -64,6 +73,7 @@
 # codex_skip_git_repo_check = true
 
 [runtime_transcription]
+# allowed: faster_whisper, local, lmstudio, remote
 # mode = "faster_whisper"
 # base_url = ""
 # model = ""
@@ -74,6 +84,7 @@
 # timeout_seconds = 0
 
 [audio]
+# allowed: always_on, push_to_talk
 # mode = "always_on"
 # input_device_id = ""
 # muted = false
@@ -82,6 +93,7 @@
 # level_max = 0.95
 
 [prompts]
+# allowed: implement_changes, draft_plan, create_jira_tickets
 # default_template = "implement_changes"
 # implement_changes_text = '''
 # The built-in Implement changes prompt will appear here after first run.

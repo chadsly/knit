@@ -17,6 +17,19 @@ import (
 
 const defaultFilename = "knit.toml"
 
+const (
+	controlCapabilitiesComment  = "allowed: capture, submit, config, config_read, purge, read, logs, *"
+	transcriptionModesComment   = "allowed: faster_whisper, local, lmstudio, remote"
+	uiRuntimeComment            = "allowed today: native_tray_plus_local_web_ui"
+	videoModesComment           = "allowed: event_triggered, on_demand, continuous"
+	submitProvidersComment      = "choose from: codex_cli, claude_cli, opencode_cli, codex_api, claude_api"
+	submitExecutionModesComment = "allowed: series, parallel"
+	codexSandboxComment         = "allowed: read-only, workspace-write, danger-full-access"
+	codexApprovalComment        = "allowed: untrusted, on-request, never"
+	audioModesComment           = "allowed: always_on, push_to_talk"
+	promptTemplatesComment      = "allowed: implement_changes, draft_plan, create_jira_tickets"
+)
+
 type File struct {
 	Config               config.PublicConfig         `toml:"config"`
 	RuntimeCodex         runtimeCodexSection         `toml:"runtime_codex"`
@@ -250,19 +263,19 @@ func renderFile(cfg config.Config, state operatorstate.State) string {
 	writeString(&b, "build_id", cfgPublic.BuildID, "", "optional build identifier shown in runtime state")
 	writeString(&b, "version_pin", cfgPublic.VersionPin, "", "optional managed deployment pin")
 	writeString(&b, "managed_deployment_id", cfgPublic.ManagedDeploymentID, "", "optional deployment identifier")
-	writeString(&b, "transcription_mode", cfgPublic.TranscriptionMode, "faster_whisper", "")
+	writeString(&b, "transcription_mode", cfgPublic.TranscriptionMode, "faster_whisper", transcriptionModesComment)
 	writeBool(&b, "allow_remote_stt", cfgPublic.AllowRemoteSTT, true, "")
 	writeBool(&b, "allow_remote_submit", cfgPublic.AllowRemoteSubmit, true, "")
-	writeStringArray(&b, "control_capabilities", cfgPublic.ControlCapabilities, []string{"capture", "submit", "config", "purge", "read"}, "")
+	writeStringArray(&b, "control_capabilities", cfgPublic.ControlCapabilities, []string{"capture", "submit", "config", "purge", "read"}, controlCapabilitiesComment)
 	writeBool(&b, "config_locked", cfgPublic.ConfigLocked, false, "")
 	writeBool(&b, "capture_settings_locked", cfgPublic.CaptureSettingsLocked, false, "")
 	writeBool(&b, "window_scoped_capture", cfgPublic.WindowScopedCapture, true, "")
 	writeBool(&b, "browser_app_first", cfgPublic.BrowserAppFirst, true, "")
-	writeString(&b, "ui_runtime", cfgPublic.UIRuntime, "native_tray_plus_local_web_ui", "")
+	writeString(&b, "ui_runtime", cfgPublic.UIRuntime, "native_tray_plus_local_web_ui", uiRuntimeComment)
 	writeBool(&b, "auto_start_enabled", cfgPublic.AutoStartEnabled, false, "")
 	writeInt(&b, "pointer_sample_hz", cfgPublic.PointerSampleHz, 30, "")
 	writeBool(&b, "video_enabled_default", cfgPublic.VideoEnabledDefault, false, "")
-	writeString(&b, "video_mode", cfgPublic.VideoMode, "event_triggered", "")
+	writeString(&b, "video_mode", cfgPublic.VideoMode, "event_triggered", videoModesComment)
 	writeString(&b, "audio_retention", cfgPublic.AudioRetention, "0s", "")
 	writeString(&b, "screenshot_retention", cfgPublic.ScreenshotRetention, "336h0m0s", "")
 	writeString(&b, "video_retention", cfgPublic.VideoRetention, "168h0m0s", "")
@@ -273,22 +286,22 @@ func renderFile(cfg config.Config, state operatorstate.State) string {
 	writeInt(&b, "artifact_max_files", cfgPublic.ArtifactMaxFiles, 2000, "")
 	writeStringArray(&b, "outbound_allowlist", cfgPublic.OutboundAllowlist, nil, "optional explicit outbound allowlist")
 	writeStringArray(&b, "blocked_targets", cfgPublic.BlockedTargets, nil, "optional explicit outbound blocklist")
-	writeStringArray(&b, "allowed_submit_providers", cfgPublic.AllowedSubmitProviders, nil, "optional explicit submit-provider allowlist")
+	writeStringArray(&b, "allowed_submit_providers", cfgPublic.AllowedSubmitProviders, nil, submitProvidersComment)
 	writeString(&b, "siem_log_path", cfgPublic.SIEMLogPath, "", "optional SIEM JSONL mirror path")
 
 	writeSectionHeader(&b, "runtime_codex")
-	writeString(&b, "default_provider", rc.DefaultProvider, "codex_cli", "")
+	writeString(&b, "default_provider", rc.DefaultProvider, "codex_cli", submitProvidersComment)
 	writeString(&b, "cli_adapter_cmd", rc.CLIAdapterCmd, "", "")
 	writeInt(&b, "cli_timeout_seconds", rc.CLITimeoutSeconds, 600, "")
 	writeString(&b, "claude_cli_adapter_cmd", rc.ClaudeCLIAdapterCmd, "", "")
 	writeInt(&b, "claude_cli_timeout_seconds", rc.ClaudeCLITimeoutSeconds, 600, "")
 	writeString(&b, "opencode_cli_adapter_cmd", rc.OpenCodeCLIAdapterCmd, "", "")
 	writeInt(&b, "opencode_cli_timeout_seconds", rc.OpenCodeCLITimeoutSecs, 600, "")
-	writeString(&b, "submit_execution_mode", rc.SubmitExecMode, "series", "")
+	writeString(&b, "submit_execution_mode", rc.SubmitExecMode, "series", submitExecutionModesComment)
 	writeString(&b, "codex_workdir", rc.CodexWorkdir, "", "")
 	writeString(&b, "codex_output_dir", rc.CodexOutputDir, "", "")
-	writeString(&b, "codex_sandbox", rc.CodexSandbox, operatorstate.DefaultLocalCodingSandbox, "")
-	writeString(&b, "codex_approval_policy", rc.CodexApproval, operatorstate.DefaultLocalCodingApproval, "")
+	writeString(&b, "codex_sandbox", rc.CodexSandbox, operatorstate.DefaultLocalCodingSandbox, codexSandboxComment)
+	writeString(&b, "codex_approval_policy", rc.CodexApproval, operatorstate.DefaultLocalCodingApproval, codexApprovalComment)
 	writeString(&b, "codex_profile", rc.CodexProfile, "", "")
 	writeString(&b, "codex_model", rc.CodexModel, "", "")
 	writeString(&b, "codex_reasoning_effort", rc.CodexReasoning, "", "")
@@ -305,7 +318,7 @@ func renderFile(cfg config.Config, state operatorstate.State) string {
 	writeBool(&b, "codex_skip_git_repo_check", rc.CodexSkipRepoCheck, true, "")
 
 	writeSectionHeader(&b, "runtime_transcription")
-	writeString(&b, "mode", rt.Mode, cfg.TranscriptionMode, "")
+	writeString(&b, "mode", rt.Mode, cfg.TranscriptionMode, transcriptionModesComment)
 	writeString(&b, "base_url", rt.BaseURL, "", "")
 	writeString(&b, "model", rt.Model, "", "")
 	writeString(&b, "device", rt.Device, "", "")
@@ -315,7 +328,7 @@ func renderFile(cfg config.Config, state operatorstate.State) string {
 	writeInt(&b, "timeout_seconds", rt.TimeoutSecond, 0, "")
 
 	writeSectionHeader(&b, "audio")
-	writeString(&b, "mode", audioState.Mode, audio.ModeAlwaysOn, "")
+	writeString(&b, "mode", audioState.Mode, audio.ModeAlwaysOn, audioModesComment)
 	writeString(&b, "input_device_id", audioState.InputDeviceID, "", "")
 	writeBool(&b, "muted", audioState.Muted, false, "")
 	writeBool(&b, "paused", audioState.Paused, false, "")
@@ -323,7 +336,7 @@ func renderFile(cfg config.Config, state operatorstate.State) string {
 	writeFloat(&b, "level_max", audioState.LevelMax, 0.95, "")
 
 	writeSectionHeader(&b, "prompts")
-	writeString(&b, "default_template", rc.DeliveryIntentProfile, operatorstate.DefaultDeliveryIntentProfile, "")
+	writeString(&b, "default_template", rc.DeliveryIntentProfile, operatorstate.DefaultDeliveryIntentProfile, promptTemplatesComment)
 	writeMultilineString(&b, "implement_changes_text", rc.ImplementChangesPrompt, operatorstate.DefaultPromptImplementChanges(), "")
 	writeMultilineString(&b, "draft_plan_text", rc.DraftPlanPrompt, operatorstate.DefaultPromptDraftPlan(), "")
 	writeMultilineString(&b, "create_jira_tickets_text", rc.CreateJiraTicketsPrompt, operatorstate.DefaultPromptCreateJiraTickets(), "")

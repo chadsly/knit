@@ -45,6 +45,24 @@ func TestConfigExamplesExist(t *testing.T) {
 			t.Fatalf("expected config example %s: %v", path, err)
 		}
 	}
+
+	raw, err := os.ReadFile("../.env.example")
+	if err != nil {
+		t.Fatalf("read .env.example: %v", err)
+	}
+	text := string(raw)
+	required := []string{
+		"# CODEX_MODEL=gpt-5-codex",
+		"# KNIT_CLAUDE_API_MODEL=claude-3-7-sonnet-latest",
+		"# OPENAI_STT_MODEL=gpt-4o-mini-transcribe",
+		"# KNIT_TRANSCRIPTION_MODE=faster_whisper   # allowed: faster_whisper, local, lmstudio, remote",
+		"# KNIT_CODEX_SANDBOX=workspace-write      # allowed: read-only, workspace-write, danger-full-access",
+	}
+	for _, fragment := range required {
+		if !strings.Contains(text, fragment) {
+			t.Fatalf("expected .env.example to include %q", fragment)
+		}
+	}
 }
 
 func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {

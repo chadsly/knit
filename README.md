@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/knit-mark.png" alt="Knit icon" width="96" />
+</p>
+
 # Knit
 
 <p align="center">

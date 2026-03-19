@@ -77,6 +77,10 @@ func TestRenderIncludesCommentedDefaults(t *testing.T) {
 
 	required := []string{
 		"# Secrets do not belong here.",
+		"# allowed: faster_whisper, local, lmstudio, remote",
+		"# choose from: codex_cli, claude_cli, opencode_cli, codex_api, claude_api",
+		"# allowed: series, parallel",
+		"# allowed: always_on, push_to_talk",
 		"# allow_remote_submit = true",
 		`default_provider = "codex_cli"`,
 		`default_template = "implement_changes"`,

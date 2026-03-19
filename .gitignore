@@ -1,4 +1,5 @@
 # Local runtime state and captured artifacts
+/knit.toml
 /.knit/
 /.lumobarkley/
 
