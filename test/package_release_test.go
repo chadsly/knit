@@ -1,14 +1,86 @@
 package test
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"compress/gzip"
+	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
+
+func pythonPackagingAvailable(t *testing.T) {
+	t.Helper()
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available")
+	}
+	cmd := exec.Command("python3", "-m", "build", "--version")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("python build module not available: %v\n%s", err, string(out))
+	}
+}
+
+func expectedPythonPackageVersion(version string) string {
+	if strings.Count(version, ".") == 2 && !strings.Contains(version, "-") {
+		return version
+	}
+	if strings.HasPrefix(version, "0.0.0-ci.") {
+		return "0.0.0.dev0"
+	}
+	if idx := strings.Index(version, "-"); idx > 0 {
+		return version[:idx] + ".dev0"
+	}
+	return version
+}
+
+func archiveContainsTarGZ(t *testing.T, archivePath string, wanted string) bool {
+	t.Helper()
+	file, err := os.Open(archivePath)
+	if err != nil {
+		t.Fatalf("open tar.gz archive %s: %v", archivePath, err)
+	}
+	defer file.Close()
+	gzr, err := gzip.NewReader(file)
+	if err != nil {
+		t.Fatalf("open gzip reader %s: %v", archivePath, err)
+	}
+	defer gzr.Close()
+	tr := tar.NewReader(gzr)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			return false
+		}
+		if err != nil {
+			t.Fatalf("read tar entry %s: %v", archivePath, err)
+		}
+		if filepath.Clean(header.Name) == filepath.Clean(wanted) {
+			return true
+		}
+	}
+}
+
+func archiveContainsZip(t *testing.T, archivePath string, wanted string) bool {
+	t.Helper()
+	reader, err := zip.OpenReader(archivePath)
+	if err != nil {
+		t.Fatalf("open zip archive %s: %v", archivePath, err)
+	}
+	defer reader.Close()
+	for _, file := range reader.File {
+		if filepath.Clean(file.Name) == filepath.Clean(wanted) {
+			return true
+		}
+	}
+	return false
+}
 
 func TestPackageReleaseScriptProducesArchivesAndChecksums(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
@@ -17,6 +89,7 @@ func TestPackageReleaseScriptProducesArchivesAndChecksums(t *testing.T) {
 	if _, err := exec.LookPath("npm"); err != nil {
 		t.Skip("npm not available")
 	}
+	pythonPackagingAvailable(t)
 
 	distDir := prepareFakeDist(t)
 	writeReleaseInputs(t, distDir)
@@ -63,6 +136,9 @@ func TestPackageReleaseScriptProducesArchivesAndChecksums(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(pkgDir, "npm", "knit-daemon", "package.json")); err != nil {
 		t.Fatalf("expected npm package scaffold: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(pkgDir, "python", "knit", "pyproject.toml")); err != nil {
+		t.Fatalf("expected python package scaffold: %v", err)
+	}
 	npmTarballs, err := filepath.Glob(filepath.Join(pkgDir, "chadsly-knit-*.tgz"))
 	if err != nil {
 		t.Fatalf("glob npm tarballs: %v", err)
@@ -70,8 +146,37 @@ func TestPackageReleaseScriptProducesArchivesAndChecksums(t *testing.T) {
 	if len(npmTarballs) != 1 {
 		t.Fatalf("expected one npm tarball, got %#v", npmTarballs)
 	}
+	pythonSDists, err := filepath.Glob(filepath.Join(pkgDir, "chadsly_knit-*.tar.gz"))
+	if err != nil {
+		t.Fatalf("glob python sdists: %v", err)
+	}
+	if len(pythonSDists) != 1 {
+		t.Fatalf("expected one python sdist, got %#v", pythonSDists)
+	}
+	pythonWheels, err := filepath.Glob(filepath.Join(pkgDir, "chadsly_knit-*.whl"))
+	if err != nil {
+		t.Fatalf("glob python wheels: %v", err)
+	}
+	if len(pythonWheels) != 1 {
+		t.Fatalf("expected one python wheel, got %#v", pythonWheels)
+	}
+	if !archiveContainsTarGZ(t, filepath.Join(pkgDir, "knit_0.0.0-test_linux_amd64.tar.gz"), "docs/GETTING_STARTED.md") {
+		t.Fatalf("expected linux archive to include docs/GETTING_STARTED.md")
+	}
+	if !archiveContainsTarGZ(t, filepath.Join(pkgDir, "knit_0.0.0-test_linux_amd64.tar.gz"), "docs/assets/knit-mark.png") {
+		t.Fatalf("expected linux archive to include docs/assets/knit-mark.png")
+	}
+	if !archiveContainsZip(t, filepath.Join(pkgDir, "knit_0.0.0-test_windows_amd64.zip"), "docs/GETTING_STARTED.md") {
+		t.Fatalf("expected windows archive to include docs/GETTING_STARTED.md")
+	}
+	if !archiveContainsZip(t, filepath.Join(pkgDir, "knit_0.0.0-test_windows_amd64.zip"), "docs/assets/knit-mark.png") {
+		t.Fatalf("expected windows archive to include docs/assets/knit-mark.png")
+	}
 	if !strings.Contains(string(checksums), ".tgz") {
 		t.Fatalf("expected npm tarball checksum, got:\n%s", string(checksums))
+	}
+	if !strings.Contains(string(checksums), ".whl") {
+		t.Fatalf("expected python wheel checksum, got:\n%s", string(checksums))
 	}
 	rawPkg, err := os.ReadFile(filepath.Join(pkgDir, "npm", "knit-daemon", "package.json"))
 	if err != nil {
@@ -94,6 +199,21 @@ func TestPackageReleaseScriptProducesArchivesAndChecksums(t *testing.T) {
 	if _, ok := bin["knit-daemon"]; ok {
 		t.Fatalf("did not expect knit-daemon bin alias in npm package")
 	}
+	rawPyProject, err := os.ReadFile(filepath.Join(pkgDir, "python", "knit", "pyproject.toml"))
+	if err != nil {
+		t.Fatalf("read python pyproject: %v", err)
+	}
+	pyProject := string(rawPyProject)
+	requiredPythonFragments := []string{
+		`name = "chadsly-knit"`,
+		`version = "` + expectedPythonPackageVersion("0.0.0-test") + `"`,
+		`knit = "chadsly_knit.cli:main"`,
+	}
+	for _, fragment := range requiredPythonFragments {
+		if !strings.Contains(pyProject, fragment) {
+			t.Fatalf("expected python packaging fragment %q in pyproject:\n%s", fragment, pyProject)
+		}
+	}
 }
 
 func TestPackageReleaseScriptBuildsSelfContainedNpmPackage(t *testing.T) {
@@ -103,6 +223,7 @@ func TestPackageReleaseScriptBuildsSelfContainedNpmPackage(t *testing.T) {
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node not available")
 	}
+	pythonPackagingAvailable(t)
 
 	distDir := prepareFakeDist(t)
 	writeReleaseInputs(t, distDir)
@@ -122,6 +243,12 @@ func TestPackageReleaseScriptBuildsSelfContainedNpmPackage(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(runtimeDir, "daemon")); err != nil && runtime.GOOS != "windows" {
 		t.Fatalf("expected extracted daemon: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(runtimeDir, "docs", "GETTING_STARTED.md")); err != nil {
+		t.Fatalf("expected extracted docs guide: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(runtimeDir, "docs", "assets", "knit-mark.png")); err != nil {
+		t.Fatalf("expected extracted logo asset: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(npmPkgDir, "artifacts", "release-manifest.json")); err != nil {
 		t.Fatalf("expected bundled release manifest: %v", err)
 	}
@@ -136,6 +263,80 @@ func TestPackageReleaseScriptBuildsSelfContainedNpmPackage(t *testing.T) {
 	}
 }
 
+func TestPackageReleaseScriptBuildsSelfContainedPythonPackage(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available")
+	}
+	pythonPackagingAvailable(t)
+
+	distDir := prepareFakeDist(t)
+	writeReleaseInputs(t, distDir)
+	cmd := exec.Command("bash", "../scripts/package-release.sh", distDir)
+	cmd.Env = append(os.Environ(), "VERSION=0.0.0-test")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("package script failed: %v\n%s", err, string(out))
+	}
+
+	wheels, err := filepath.Glob(filepath.Join(distDir, "packages", "chadsly_knit-*.whl"))
+	if err != nil {
+		t.Fatalf("glob python wheels: %v", err)
+	}
+	if len(wheels) != 1 {
+		t.Fatalf("expected one python wheel, got %#v", wheels)
+	}
+
+	venvDir := filepath.Join(t.TempDir(), "venv")
+	createVenv := exec.Command("python3", "-m", "venv", venvDir)
+	if out, err := createVenv.CombinedOutput(); err != nil {
+		t.Fatalf("create venv failed: %v\n%s", err, string(out))
+	}
+	venvPython := filepath.Join(venvDir, "bin", "python")
+	venvPip := filepath.Join(venvDir, "bin", "pip")
+	if runtime.GOOS == "windows" {
+		venvPython = filepath.Join(venvDir, "Scripts", "python.exe")
+		venvPip = filepath.Join(venvDir, "Scripts", "pip.exe")
+	}
+	install := exec.Command(venvPip, "install", wheels[0])
+	if out, err := install.CombinedOutput(); err != nil {
+		t.Fatalf("install python wheel failed: %v\n%s", err, string(out))
+	}
+
+	version := exec.Command(venvPython, "-m", "chadsly_knit.cli", "version")
+	out, err := version.CombinedOutput()
+	if err != nil {
+		t.Fatalf("python cli version failed: %v\n%s", err, string(out))
+	}
+	if strings.TrimSpace(string(out)) != expectedPythonPackageVersion("0.0.0-test") {
+		t.Fatalf("expected python cli version output, got %q", strings.TrimSpace(string(out)))
+	}
+
+	pathCmd := exec.Command(venvPython, "-m", "chadsly_knit.cli", "path")
+	homeDir := filepath.Join(t.TempDir(), "home")
+	pathCmd.Env = append(os.Environ(),
+		"HOME="+homeDir,
+		"XDG_DATA_HOME="+filepath.Join(homeDir, ".local", "share"),
+		"LOCALAPPDATA="+filepath.Join(homeDir, "AppData", "Local"),
+	)
+	out, err = pathCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("python cli path failed: %v\n%s", err, string(out))
+	}
+	daemonPath := strings.TrimSpace(string(out))
+	if daemonPath == "" {
+		t.Fatalf("expected python cli path output")
+	}
+	if _, err := os.Stat(daemonPath); err != nil {
+		t.Fatalf("expected extracted daemon path %s: %v", daemonPath, err)
+	}
+	runtimeDir := filepath.Dir(daemonPath)
+	if _, err := os.Stat(filepath.Join(runtimeDir, "docs", "GETTING_STARTED.md")); err != nil {
+		t.Fatalf("expected extracted python docs guide: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(runtimeDir, "docs", "assets", "knit-mark.png")); err != nil {
+		t.Fatalf("expected extracted python logo asset: %v", err)
+	}
+}
+
 func TestPackageReleaseScriptSupportsChecksumSigning(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
@@ -143,6 +344,7 @@ func TestPackageReleaseScriptSupportsChecksumSigning(t *testing.T) {
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not available")
 	}
+	pythonPackagingAvailable(t)
 
 	distDir := prepareFakeDist(t)
 	writeReleaseInputs(t, distDir)
@@ -188,6 +390,7 @@ func TestReleaseReadinessCheckPassesForUnsignedNonTagBuild(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
 	}
+	pythonPackagingAvailable(t)
 	distDir := prepareFakeDist(t)
 	writeReleaseInputs(t, distDir)
 	cmd := exec.Command("bash", "../scripts/package-release.sh", distDir)
@@ -206,6 +409,7 @@ func TestReleaseReadinessCheckFailsForTagWithoutSignature(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
 	}
+	pythonPackagingAvailable(t)
 	distDir := prepareFakeDist(t)
 	writeReleaseInputs(t, distDir)
 	cmd := exec.Command("bash", "../scripts/package-release.sh", distDir)
@@ -232,6 +436,7 @@ func TestReleaseReadinessCheckFailsForTagWithoutManifestSignature(t *testing.T) 
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not available")
 	}
+	pythonPackagingAvailable(t)
 	distDir := prepareFakeDist(t)
 	writeReleaseInputs(t, distDir)
 	keysDir := t.TempDir()
@@ -275,6 +480,7 @@ func TestReleaseReadinessCheckFailsForTaggedBuildWithoutSBOM(t *testing.T) {
 	if _, err := exec.LookPath("openssl"); err != nil {
 		t.Skip("openssl not available")
 	}
+	pythonPackagingAvailable(t)
 	distDir := prepareFakeDist(t)
 	writeReleaseInputs(t, distDir)
 	if err := os.Remove(filepath.Join(distDir, "sbom.spdx.json")); err != nil {
@@ -316,6 +522,7 @@ func TestPackageReleaseScriptFailsClearlyWithoutBuildOutputs(t *testing.T) {
 	if _, err := exec.LookPath("bash"); err != nil {
 		t.Skip("bash not available")
 	}
+	pythonPackagingAvailable(t)
 	distDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(distDir, "sbom.spdx.json"), []byte(`{"spdxVersion":"SPDX-2.3"}`), 0o644); err != nil {
 		t.Fatalf("write sbom: %v", err)
@@ -404,6 +611,36 @@ func TestBuildCrossPlatformScriptProducesBuildManifest(t *testing.T) {
 		if !found {
 			t.Fatalf("expected build manifest artifact %s, got %#v", path, payload["artifacts"])
 		}
+	}
+}
+
+func TestBuildCrossPlatformScriptEmbedsDaemonVersion(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not available")
+	}
+	distDir := t.TempDir()
+	build := exec.Command("bash", "../scripts/build-cross-platform.sh", distDir)
+	build.Env = append(os.Environ(), "VERSION=0.0.7-test")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build script failed: %v\n%s", err, string(out))
+	}
+
+	target := filepath.Join(distDir, "bin", runtime.GOOS+"_"+runtime.GOARCH, "daemon")
+	if runtime.GOOS == "windows" {
+		target += ".exe"
+	}
+	cmd := exec.Command(target)
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	cmd = exec.CommandContext(ctx, target)
+	cmd.Env = append(os.Environ(), "KNIT_ADDR=127.0.0.1:17781")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected daemon process to keep running until interrupted")
+	}
+	text := string(out)
+	if !strings.Contains(text, "Version: 0.0.7-test") {
+		t.Fatalf("expected embedded version in daemon startup output, got:\n%s", text)
 	}
 }
 

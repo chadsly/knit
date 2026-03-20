@@ -6,7 +6,6 @@ import (
 
 const (
 	IntentImplementChanges = "implement_changes"
-	IntentDraftPlan        = "draft_plan"
 	IntentCreateJira       = "create_jira_tickets"
 )
 
@@ -22,7 +21,7 @@ type DeliveryIntent struct {
 func NormalizeDeliveryIntent(intent DeliveryIntent) DeliveryIntent {
 	profile := strings.TrimSpace(strings.ToLower(intent.Profile))
 	switch profile {
-	case IntentDraftPlan, IntentCreateJira:
+	case IntentCreateJira:
 	default:
 		profile = IntentImplementChanges
 	}
@@ -43,8 +42,6 @@ func NormalizeDeliveryIntent(intent DeliveryIntent) DeliveryIntent {
 
 func (intent DeliveryIntent) Label() string {
 	switch NormalizeDeliveryIntent(intent).Profile {
-	case IntentDraftPlan:
-		return "Draft plan"
 	case IntentCreateJira:
 		return "Create Jira tickets"
 	default:
@@ -70,21 +67,6 @@ func RenderInstructionText(intent DeliveryIntent) string {
 
 func DefaultInstructionTemplate(profile string) string {
 	switch NormalizeDeliveryIntent(DeliveryIntent{Profile: profile}).Profile {
-	case IntentDraftPlan:
-		return strings.Join([]string{
-			"You are receiving a canonical Knit feedback payload JSON.",
-			"Produce a concrete implementation plan for the requested software changes without editing the repository.",
-			"",
-			"Rules:",
-			"- Do not edit files or make repository changes.",
-			"- Focus on scope, intended behavior, risks, sequencing, and validation steps.",
-			"- Call out assumptions and edge cases clearly.",
-			"- Return a concise, actionable plan rather than implementation code.",
-			"- If the repository is already dirty, use that only as context; do not modify it.",
-			"",
-			"External tracker operations are disabled for this run.",
-			"Do not call Jira/Atlassian/GitHub issue tools.",
-		}, "\n")
 	case IntentCreateJira:
 		return strings.Join([]string{
 			"You are receiving a canonical Knit feedback payload JSON.",

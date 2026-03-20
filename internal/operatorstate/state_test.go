@@ -138,9 +138,6 @@ func TestNormalizeRuntimeCodexDefaultsFillsSandboxAndApproval(t *testing.T) {
 	if !strings.Contains(state.ImplementChangesPrompt, "canonical Knit feedback payload JSON") {
 		t.Fatalf("expected default implement-changes prompt to be populated")
 	}
-	if !strings.Contains(state.DraftPlanPrompt, "Produce a concrete implementation plan") {
-		t.Fatalf("expected default draft-plan prompt to be populated")
-	}
 	if !strings.Contains(state.CreateJiraTicketsPrompt, "Jira-ready implementation tickets") {
 		t.Fatalf("expected default jira prompt to be populated")
 	}

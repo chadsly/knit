@@ -362,7 +362,7 @@ func TestPreviewProviderPayloadWithConfigProducesProviderSpecificContracts(t *te
 		}},
 	}
 
-	intent := DeliveryIntent{Profile: IntentDraftPlan, CustomInstructions: "Focus on rollout risk."}
+	intent := DeliveryIntent{Profile: IntentCreateJira, CustomInstructions: "Focus on rollout risk."}
 	codexPayload, err := PreviewProviderPayloadWithConfig("codex_api", pkg, "gpt-5-codex-mini", "", intent)
 	if err != nil {
 		t.Fatalf("preview codex payload: %v", err)
@@ -382,7 +382,7 @@ func TestPreviewProviderPayloadWithConfigProducesProviderSpecificContracts(t *te
 	if !strings.Contains(text, "\"session_id\":\"sess-payload\"") || !strings.Contains(text, "\"visual_target_ref\":\"button#save\"") {
 		t.Fatalf("expected canonical package to be embedded in codex payload, got %q", text)
 	}
-	if !strings.Contains(text, "Produce a concrete implementation plan") || !strings.Contains(text, "Focus on rollout risk.") {
+	if !strings.Contains(text, "Jira-ready implementation tickets") || !strings.Contains(text, "Focus on rollout risk.") {
 		t.Fatalf("expected codex payload to include intent-specific instructions, got %q", text)
 	}
 
@@ -404,7 +404,7 @@ func TestPreviewProviderPayloadWithConfigProducesProviderSpecificContracts(t *te
 	if !strings.Contains(messageText, "\"session_id\":\"sess-payload\"") || !strings.Contains(messageText, "\"visual_target_ref\":\"button#save\"") {
 		t.Fatalf("expected canonical package to be embedded in claude payload, got %q", messageText)
 	}
-	if !strings.Contains(messageText, "Produce a concrete implementation plan") || !strings.Contains(messageText, "Focus on rollout risk.") {
+	if !strings.Contains(messageText, "Jira-ready implementation tickets") || !strings.Contains(messageText, "Focus on rollout risk.") {
 		t.Fatalf("expected claude payload to include intent-specific instructions, got %q", messageText)
 	}
 
@@ -420,10 +420,10 @@ func TestPreviewProviderPayloadWithConfigProducesProviderSpecificContracts(t *te
 		if encodedPkg.SessionID != "sess-payload" || len(encodedPkg.ChangeRequests) != 1 {
 			t.Fatalf("expected canonical package passthrough for %s, got %#v", provider, payload["package"])
 		}
-		if payload["intent_profile"] != IntentDraftPlan {
+		if payload["intent_profile"] != IntentCreateJira {
 			t.Fatalf("expected intent profile for %s, got %#v", provider, payload["intent_profile"])
 		}
-		if !strings.Contains(payload["instruction_text"].(string), "Produce a concrete implementation plan") {
+		if !strings.Contains(payload["instruction_text"].(string), "Jira-ready implementation tickets") {
 			t.Fatalf("expected CLI instruction text for %s, got %#v", provider, payload["instruction_text"])
 		}
 	}
@@ -433,8 +433,8 @@ func TestRenderInstructionTextHonorsIntentProfiles(t *testing.T) {
 	if text := RenderInstructionText(DeliveryIntent{}); !strings.Contains(text, "Implement the requested software changes") {
 		t.Fatalf("expected default implement intent, got %q", text)
 	}
-	if text := RenderInstructionText(DeliveryIntent{Profile: IntentDraftPlan}); !strings.Contains(text, "Do not edit files or make repository changes.") {
-		t.Fatalf("expected draft-plan guidance, got %q", text)
+	if text := RenderInstructionText(DeliveryIntent{Profile: "draft_plan"}); !strings.Contains(text, "Implement the requested software changes") {
+		t.Fatalf("expected legacy draft-plan profile to fall back to implement guidance, got %q", text)
 	}
 	if text := RenderInstructionText(DeliveryIntent{Profile: IntentCreateJira, CustomInstructions: "Group by team."}); !strings.Contains(text, "Jira-ready implementation tickets") || !strings.Contains(text, "Group by team.") {
 		t.Fatalf("expected jira guidance plus custom instructions, got %q", text)

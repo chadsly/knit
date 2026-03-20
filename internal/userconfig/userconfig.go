@@ -27,7 +27,7 @@ const (
 	codexSandboxComment         = "allowed: read-only, workspace-write, danger-full-access"
 	codexApprovalComment        = "allowed: untrusted, on-request, never"
 	audioModesComment           = "allowed: always_on, push_to_talk"
-	promptTemplatesComment      = "allowed: implement_changes, draft_plan, create_jira_tickets"
+	promptTemplatesComment      = "allowed: implement_changes, create_jira_tickets"
 )
 
 type File struct {
@@ -356,7 +356,6 @@ func renderFile(cfg config.Config, state operatorstate.State) string {
 	writeSectionHeader(&b, "prompts")
 	writeString(&b, "default_template", rc.DeliveryIntentProfile, operatorstate.DefaultDeliveryIntentProfile, promptTemplatesComment)
 	writeMultilineString(&b, "implement_changes_text", rc.ImplementChangesPrompt, operatorstate.DefaultPromptImplementChanges(), "")
-	writeMultilineString(&b, "draft_plan_text", rc.DraftPlanPrompt, operatorstate.DefaultPromptDraftPlan(), "")
 	writeMultilineString(&b, "create_jira_tickets_text", rc.CreateJiraTicketsPrompt, operatorstate.DefaultPromptCreateJiraTickets(), "")
 
 	return b.String()

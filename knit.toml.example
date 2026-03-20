@@ -97,13 +97,10 @@
 # level_max = 0.95
 
 [prompts]
-# allowed: implement_changes, draft_plan, create_jira_tickets
+# allowed: implement_changes, create_jira_tickets
 # default_template = "implement_changes"
 # implement_changes_text = '''
 # The built-in Implement changes prompt will appear here after first run.
-# '''
-# draft_plan_text = '''
-# The built-in Draft plan prompt will appear here after first run.
 # '''
 # create_jira_tickets_text = '''
 # The built-in Create Jira tickets prompt will appear here after first run.

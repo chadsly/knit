@@ -3718,9 +3718,8 @@ func TestRuntimeCodexConfigEndpointUpdatesRuntimeState(t *testing.T) {
 		"anthropic_base_url":"https://api.anthropic.com",
 		"claude_api_timeout_seconds":95,
 		"claude_api_model":"claude-3-7-sonnet-latest",
-		"delivery_intent_profile":"draft_plan",
+		"delivery_intent_profile":"create_jira_tickets",
 		"implement_changes_prompt":"Implement exactly what the package requests.",
-		"draft_plan_prompt":"Write a phased plan only.",
 		"create_jira_tickets_prompt":"Create Jira tickets from this package.",
 		"post_submit_rebuild_cmd":"echo rebuild",
 		"post_submit_verify_cmd":"echo verify",
@@ -3761,11 +3760,8 @@ func TestRuntimeCodexConfigEndpointUpdatesRuntimeState(t *testing.T) {
 	if got := rt["claude_api_model"]; got != "claude-3-7-sonnet-latest" {
 		t.Fatalf("expected Claude API model in runtime state, got %#v", got)
 	}
-	if got := rt["delivery_intent_profile"]; got != "draft_plan" {
+	if got := rt["delivery_intent_profile"]; got != "create_jira_tickets" {
 		t.Fatalf("expected delivery intent profile in runtime state, got %#v", got)
-	}
-	if got := rt["draft_plan_prompt"]; got != "Write a phased plan only." {
-		t.Fatalf("expected draft plan prompt in runtime state, got %#v", got)
 	}
 	if got := rt["implement_changes_prompt"]; got != "Implement exactly what the package requests." {
 		t.Fatalf("expected implement prompt in runtime state, got %#v", got)

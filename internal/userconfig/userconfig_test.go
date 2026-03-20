@@ -20,8 +20,8 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	state.System.CheckUpdatesOnStartup = false
 	state.RuntimeCodex.DefaultProvider = "claude_api"
 	state.RuntimeCodex.CodexWorkdir = "/tmp/knit-workdir"
-	state.RuntimeCodex.DeliveryIntentProfile = "draft_plan"
-	state.RuntimeCodex.DraftPlanPrompt = "Plan only.\nDo not edit files."
+	state.RuntimeCodex.DeliveryIntentProfile = "create_jira_tickets"
+	state.RuntimeCodex.CreateJiraTicketsPrompt = "Create tickets only.\nDo not edit files."
 	state.RuntimeTranscription.Mode = "remote"
 	state.Audio.Mode = audio.ModePushToTalk
 	state.Audio.Muted = true
@@ -48,7 +48,7 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	if !strings.Contains(text, `default_provider = "claude_api"`) {
 		t.Fatalf("expected saved default provider in config, got:\n%s", text)
 	}
-	if !strings.Contains(text, `default_template = "draft_plan"`) {
+	if !strings.Contains(text, `default_template = "create_jira_tickets"`) {
 		t.Fatalf("expected saved prompt template in config, got:\n%s", text)
 	}
 
@@ -65,11 +65,11 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	if loaded.State.System.CheckUpdatesOnStartup {
 		t.Fatalf("expected loaded startup update check to remain disabled")
 	}
-	if loaded.State.RuntimeCodex.DeliveryIntentProfile != "draft_plan" {
-		t.Fatalf("expected loaded delivery intent draft_plan, got %q", loaded.State.RuntimeCodex.DeliveryIntentProfile)
+	if loaded.State.RuntimeCodex.DeliveryIntentProfile != "create_jira_tickets" {
+		t.Fatalf("expected loaded delivery intent create_jira_tickets, got %q", loaded.State.RuntimeCodex.DeliveryIntentProfile)
 	}
-	if got := loaded.State.RuntimeCodex.DraftPlanPrompt; got != "Plan only.\nDo not edit files." {
-		t.Fatalf("expected loaded draft prompt, got %q", got)
+	if got := loaded.State.RuntimeCodex.CreateJiraTicketsPrompt; got != "Create tickets only.\nDo not edit files." {
+		t.Fatalf("expected loaded jira prompt, got %q", got)
 	}
 	if loaded.State.Audio.Mode != audio.ModePushToTalk || !loaded.State.Audio.Muted {
 		t.Fatalf("expected loaded audio state to round-trip, got %#v", loaded.State.Audio)

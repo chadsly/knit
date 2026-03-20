@@ -95,6 +95,8 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 		"vulnerability-scan:",
 		"release-signature-verify:",
 		"actions/setup-node@",
+		"actions/setup-python@",
+		"python3 -m pip install --upgrade build",
 		"name: build-dist",
 		"path: dist-ci/",
 		"version=\"0.0.0-ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}\"",
@@ -151,7 +153,23 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 		"Tag $tag already exists.",
 		"dist-ci/bin missing before packaging; rebuilding release binaries",
 		"npm publish --access public --tag latest --provenance dist-ci/packages/chadsly-knit-${VERSION}.tgz",
+		"PYPI_API_TOKEN_SECRET: ${{ secrets.PYPI_API_TOKEN }}",
+		"PYPI_API_TOKEN secret is required for stable PyPI releases.",
+		"actions/setup-python@v5",
+		"python3 -m pip install --upgrade build twine",
+		"python3 -m twine upload \\",
+		"dist-ci/packages/chadsly_knit-${VERSION}.tar.gz",
+		"dist-ci/packages/chadsly_knit-${VERSION}-py3-none-any.whl",
 		"softprops/action-gh-release@v2",
+		"dist-ci/packages/*.tar.gz",
+		"dist-ci/packages/*.zip",
+		"dist-ci/packages/*.tgz",
+		"dist-ci/packages/*.whl",
+		"dist-ci/packages/installers/*.install.sh",
+		"dist-ci/packages/installers/*.install.command",
+		"dist-ci/packages/installers/*.install.ps1",
+		"dist-ci/packages/checksums.txt",
+		"dist-ci/packages/checksums.sig",
 		"git tag -a \"$TAG\" -m \"Release $VERSION\"",
 		"git push origin \"$TAG\"",
 		"CI_COMMIT_TAG: ${{ steps.release.outputs.tag }}",
@@ -159,6 +177,16 @@ func TestGitHubActionsWorkflowReplacesGitLabCI(t *testing.T) {
 	for _, fragment := range releaseRequired {
 		if !strings.Contains(releaseWorkflow, fragment) {
 			t.Fatalf("expected release workflow fragment %q", fragment)
+		}
+	}
+	releaseDisallowed := []string{
+		"dist-ci/packages/**",
+		"packages/npm/knit-daemon",
+		"packages/python/knit",
+	}
+	for _, fragment := range releaseDisallowed {
+		if strings.Contains(releaseWorkflow, fragment) {
+			t.Fatalf("did not expect release workflow fragment %q", fragment)
 		}
 	}
 }

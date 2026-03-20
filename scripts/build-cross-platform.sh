@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${1:-$ROOT_DIR/dist}"
 VERSION="${VERSION:-dev}"
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}"
+LDFLAGS="-buildid= -s -w -X knit/internal/config.EmbeddedBuildID=${VERSION} -X knit/internal/config.EmbeddedVersionPin=${VERSION}"
 
 cd "$ROOT_DIR"
 
@@ -47,7 +48,7 @@ for target in "${targets[@]}"; do
     fi
     out="$target_dir/${name}${ext}"
     echo " - $goos/$goarch -> $name"
-    GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-buildid= -s -w" -o "$out" "$pkg"
+    GOOS="$goos" GOARCH="$goarch" CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o "$out" "$pkg"
   done
 done
 
@@ -59,7 +60,7 @@ if [[ "${INCLUDE_TRAY_LOCAL:-0}" == "1" ]]; then
     tray_out="${tray_out}.exe"
   fi
   echo " - $(go env GOOS)/$(go env GOARCH) -> tray (local only, CGO-enabled)"
-  CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags="-buildid= -s -w" -o "$tray_out" ./cmd/tray
+  CGO_ENABLED=1 go build -trimpath -buildvcs=false -ldflags="$LDFLAGS" -o "$tray_out" ./cmd/tray
 fi
 
 checksum_file="$OUT_DIR/checksums.txt"

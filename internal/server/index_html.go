@@ -1567,7 +1567,6 @@ const indexHTML = `<!doctype html>
             <span class="field-label">Prompt template</span>
             <select id="deliveryIntentProfile" onchange="syncDeliveryIntentPromptText(true)">
               <option value="implement_changes">Implement changes</option>
-              <option value="draft_plan">Draft plan</option>
               <option value="create_jira_tickets">Create Jira tickets</option>
             </select>
           </label>
@@ -4234,8 +4233,6 @@ function syncProviderOptionsFromState() {
 function deliveryPromptForProfile(runtimeCodex, profile) {
   const rc = runtimeCodex || {};
   switch (String(profile || '').trim()) {
-    case 'draft_plan':
-      return String(rc.draft_plan_prompt || '').trim() || defaultDeliveryIntentPrompt('draft_plan');
     case 'create_jira_tickets':
       return String(rc.create_jira_tickets_prompt || '').trim() || defaultDeliveryIntentPrompt('create_jira_tickets');
     default:
@@ -4247,7 +4244,7 @@ function syncDeliveryPromptUIFromState(runtimeCodex, preservingRuntimeDraft = fa
   if (!deliveryIntentProfileEl || !deliveryInstructionTextEl || preservingRuntimeDraft) return;
   const rc = runtimeCodex || {};
   const profile = String(rc.delivery_intent_profile || deliveryIntentProfileEl.value || 'implement_changes').trim();
-  deliveryIntentProfileEl.value = profile === 'draft_plan' || profile === 'create_jira_tickets' ? profile : 'implement_changes';
+  deliveryIntentProfileEl.value = profile === 'create_jira_tickets' ? profile : 'implement_changes';
   deliveryInstructionTextEl.value = deliveryPromptForProfile(rc, deliveryIntentProfileEl.value);
 }
 
@@ -4258,7 +4255,6 @@ function currentDeliveryPromptPayload() {
   return {
     delivery_intent_profile: selected,
     implement_changes_prompt: selected === 'implement_changes' ? selectedText : deliveryPromptForProfile(rc, 'implement_changes'),
-    draft_plan_prompt: selected === 'draft_plan' ? selectedText : deliveryPromptForProfile(rc, 'draft_plan'),
     create_jira_tickets_prompt: selected === 'create_jira_tickets' ? selectedText : deliveryPromptForProfile(rc, 'create_jira_tickets'),
   };
 }
@@ -4282,21 +4278,6 @@ function renderCaptureAgentNotice() {
 
 function defaultDeliveryIntentPrompt(profile) {
   switch (String(profile || '').trim()) {
-    case 'draft_plan':
-      return [
-        'You are receiving a canonical Knit feedback payload JSON.',
-        'Produce a concrete implementation plan for the requested software changes without editing the repository.',
-        '',
-        'Rules:',
-        '- Do not edit files or make repository changes.',
-        '- Focus on scope, intended behavior, risks, sequencing, and validation steps.',
-        '- Call out assumptions and edge cases clearly.',
-        '- Return a concise, actionable plan rather than implementation code.',
-        '- If the repository is already dirty, use that only as context; do not modify it.',
-        '',
-        'External tracker operations are disabled for this run.',
-        'Do not call Jira/Atlassian/GitHub issue tools.'
-      ].join('\n');
     case 'create_jira_tickets':
       return [
         'You are receiving a canonical Knit feedback payload JSON.',
@@ -4334,14 +4315,12 @@ function defaultDeliveryIntentPrompt(profile) {
 
 function selectedDeliveryIntentProfile() {
   const profile = String(deliveryIntentProfileEl?.value || 'implement_changes').trim();
-  if (profile === 'draft_plan' || profile === 'create_jira_tickets') return profile;
+  if (profile === 'create_jira_tickets') return profile;
   return 'implement_changes';
 }
 
 function selectedDeliveryIntentLabel() {
   switch (selectedDeliveryIntentProfile()) {
-    case 'draft_plan':
-      return 'Draft plan';
     case 'create_jira_tickets':
       return 'Create Jira tickets';
     default:
@@ -6231,7 +6210,6 @@ async function applyCodexRuntime() {
       claude_api_model: readRuntimeSingleLine(claudeAPIModelEl, 'Claude API model', 128),
       delivery_intent_profile: deliveryPromptPayload.delivery_intent_profile,
       implement_changes_prompt: deliveryPromptPayload.implement_changes_prompt,
-      draft_plan_prompt: deliveryPromptPayload.draft_plan_prompt,
       create_jira_tickets_prompt: deliveryPromptPayload.create_jira_tickets_prompt,
       post_submit_rebuild_cmd: readRuntimeSingleLine(postSubmitRebuildCmdEl, 'Post-submit rebuild command'),
       post_submit_verify_cmd: readRuntimeSingleLine(postSubmitVerifyCmdEl, 'Post-submit verify command'),

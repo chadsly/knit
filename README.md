@@ -15,7 +15,6 @@ The project is aimed at teams who want a tighter loop between live product revie
 ## Get Started
 ### Prerequisites
 
-- Go installed locally
 - A supported desktop environment for the local daemon (Windows, Mac, Linux)
 - A coding agent you actually plan to send work to, configured before your first submit
 - Optional:
@@ -27,11 +26,14 @@ The project is aimed at teams who want a tighter loop between live product revie
 ### Install and run the daemon
 
 ```bash
-go run ./cmd/daemon
+npm install -g @chadsly/knit
+knit start
 ```
+Optional: Download un-archive and install/run from our release page
+
 ### Basic Session Flow
 
-1. Start the daemon.
+1. Start the daemon (e.g. knit start).
 2. Open the local UI at `http://127.0.0.1:7777`.
 3. Start a review session and select your workspace (where your code lives).
 4. Capture feedback from the main UI, floating composer, or browser extension.
@@ -185,11 +187,9 @@ What makes it different:
 - It is local-first by design, with explicit capture boundaries and operator controls.
 - It is open-source and extensible at the adapter, transcription, and capture layers.
 
-## Getting Started
+## Build
 
 If you want the full operator walkthrough, use [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
-
-Quick start:
 
 ### Prerequisites
 
@@ -205,7 +205,7 @@ Quick start:
 
 Knit is meant to augment an existing coding workflow, not replace it. Before you start a review session, make sure your submit adapter, workspace, and any required API keys or CLI commands are configured in `Settings -> Agent`, `knit.toml`, or `.env`.
 
-### Run The Daemon
+### Run The Daemon From Source
 
 ```bash
 go run ./cmd/daemon
@@ -219,11 +219,18 @@ http://127.0.0.1:7777
 
 On first run, Knit writes a user-facing config file at `./knit.toml` by default. If a legacy `./.knit/knit.toml` already exists, Knit will continue using it until you move it. Override either path with `KNIT_CONFIG_PATH` if you want the config somewhere else.
 
-The main UI shows the running Knit version in the hero area and includes a manual `Check for updates` action. Knit also checks for new GitHub releases when the UI first loads by default and shows a dismissible banner when an update is available. Disable that startup check in `knit.toml` with:
+### Run The Daemon With npm
 
-```toml
-[system]
-check_updates_on_startup = false
+```bash
+npm install -g @chadsly/knit
+knit start
+```
+
+### Run The Daemon With pip
+
+```bash
+python3 -m pip install chadsly-knit
+knit start
 ```
 
 ### Run With The Tray
@@ -273,10 +280,15 @@ See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for the full environment 
 
 When you run Knit from the repository, the runtime auto-fills the bundled wrapper scripts in `scripts/` for `codex_cli`, `claude_cli`, and `opencode_cli` if those command fields are blank.
 
-If you install the packaged npm wrapper instead, use:
+If you install a packaged daemon wrapper instead, use either:
 
 ```bash
 npm install -g @chadsly/knit
+knit start
+```
+
+```bash
+python3 -m pip install chadsly-knit
 knit start
 ```
 
@@ -371,9 +383,9 @@ test/                   release, packaging, and extension-oriented tests
 
 Near-term areas worth pushing forward:
 
-- stronger browser grounding and richer DOM evidence capture
+- richer DOM evidence capture with the broswer to allow the coding agent information about timing and user steps
 - cleaner desktop app and tray workflows
-- more coding-agent adapters and better provider isolation
+- more coding-agent adapters and better provider isolation (need to test a lot more with Claude and OpenCode)
 - persistent prompt-template library with built-in defaults, user-saved variants, and revert/reset flows shared across the main UI and popout composer
 - improved fully local transcription paths
 - stronger enterprise policy controls and deployment ergonomics
@@ -385,7 +397,7 @@ Issues and pull requests are welcome.
 Useful contribution areas:
 
 - capture modules and platform integration
-- coding-agent adapters
+- coding-agent adapters (and testing)
 - schema and canonical feedback design
 - UI and review ergonomics
 - browser extension UX
@@ -396,7 +408,6 @@ If you want to contribute, start by reading:
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/MVP_DECISIONS.md](docs/MVP_DECISIONS.md)
-- [AGENTS.md](AGENTS.md)
 
 The project is most useful when contributions make the feedback loop tighter, safer, and easier to trust.
 

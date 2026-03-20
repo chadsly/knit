@@ -20,7 +20,19 @@ This guide is scoped to the current Knit repository: a local desktop daemon, tra
 
 Use one of these methods to install and start the daemon.
 
-Package-manager tabs below assume you are using the generated or published npm wrapper package named `@chadsly/knit`. That wrapper installs the daemon on `npm install` and exposes it through the `knit` command.
+If you want the quickest install path, use one of the published wrappers:
+
+```bash
+npm install -g @chadsly/knit
+knit start
+```
+
+```bash
+python3 -m pip install chadsly-knit
+knit start
+```
+
+The published wrappers are `@chadsly/knit` on npm and `chadsly-knit` on PyPI. Both install the daemon and expose it through the `knit` command.
 
 :::tabs
 @tab Go source
@@ -37,6 +49,14 @@ Install the packaged daemon wrapper, then start it:
 
 ```bash
 npm install -g @chadsly/knit
+knit start
+```
+
+@tab pip
+Install the packaged daemon wrapper from PyPI, then start it:
+
+```bash
+python3 -m pip install chadsly-knit
 knit start
 ```
 
@@ -63,6 +83,7 @@ Install the packaged daemon wrapper, then start it:
 bun add -g @chadsly/knit
 knit start
 ```
+
 :::
 
 Then open:
@@ -172,7 +193,6 @@ Retention and audit:
 7. Configure audio and transcription mode if you plan to capture voice notes.
 8. Add feedback notes, then open `Settings -> Agent` and choose a prompt template:
    - `Implement changes`
-   - `Draft plan`
    - `Create Jira tickets`
 9. Knit will load the selected template into the prompt text box. Edit that text directly if you need to change what the agent should do with the approved feedback.
 10. Review the preview package, then approve and submit.
@@ -287,7 +307,7 @@ Stable GitHub/npm release:
 
 - Run the `Release` GitHub Actions workflow from the `main` branch.
 - Enter a stable semantic version like `0.1.0`.
-- The workflow validates the version, builds and signs the release artifacts, pushes the annotated tag `v0.1.0`, publishes `@chadsly/knit` to npm, and creates the matching GitHub Release.
+- The workflow validates the version, builds and signs the release artifacts, pushes the annotated tag `v0.1.0`, publishes `@chadsly/knit` to npm, publishes `chadsly-knit` to PyPI, and creates the matching GitHub Release.
 
 Verification helpers:
 
@@ -299,7 +319,14 @@ Verification helpers:
 ./scripts/perf-gate.sh
 ```
 
-The release scripts emit portable archives, platform installer helpers, release metadata, a generated npm wrapper scaffold under `packages/npm/knit-daemon/`, and a packed npm tarball ready for `npm publish`.
+The release scripts emit portable archives, platform installer helpers, release metadata, a generated npm wrapper scaffold under `packages/npm/knit-daemon/`, a generated Python wrapper scaffold under `packages/python/knit/`, and packed npm/PyPI artifacts ready for publication.
+
+The main UI shows the running Knit version in the hero area and includes a manual `Check for updates` action. Knit also checks for new GitHub releases when the UI first loads by default and shows a dismissible banner when an update is available. Disable that startup check in `knit.toml` with:
+
+```toml
+[system]
+check_updates_on_startup = false
+```
 
 ## Troubleshooting
 

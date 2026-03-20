@@ -123,15 +123,12 @@ func NormalizeRuntimeCodexDefaults(state RuntimeCodex) RuntimeCodex {
 		state.OpenCodeCLIAdapterCmd = defaultBundledCLIAdapterCommand("knit-opencode-cli-adapter.sh")
 	}
 	switch strings.TrimSpace(state.DeliveryIntentProfile) {
-	case agents.IntentDraftPlan, agents.IntentCreateJira:
+	case agents.IntentCreateJira:
 	default:
 		state.DeliveryIntentProfile = DefaultDeliveryIntentProfile
 	}
 	if strings.TrimSpace(state.ImplementChangesPrompt) == "" {
 		state.ImplementChangesPrompt = DefaultPromptImplementChanges()
-	}
-	if strings.TrimSpace(state.DraftPlanPrompt) == "" {
-		state.DraftPlanPrompt = DefaultPromptDraftPlan()
 	}
 	if strings.TrimSpace(state.CreateJiraTicketsPrompt) == "" {
 		state.CreateJiraTicketsPrompt = DefaultPromptCreateJiraTickets()
@@ -141,10 +138,6 @@ func NormalizeRuntimeCodexDefaults(state RuntimeCodex) RuntimeCodex {
 
 func DefaultPromptImplementChanges() string {
 	return agents.DefaultInstructionTemplate(agents.IntentImplementChanges)
-}
-
-func DefaultPromptDraftPlan() string {
-	return agents.DefaultInstructionTemplate(agents.IntentDraftPlan)
 }
 
 func DefaultPromptCreateJiraTickets() string {

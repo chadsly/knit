@@ -2137,7 +2137,6 @@ func (s *Server) runtimeAgentState() map[string]any {
 		"post_submit_timeout_seconds":  intString(rc.PostSubmitTimeout),
 		"delivery_intent_profile":      rc.DeliveryIntentProfile,
 		"implement_changes_prompt":     rc.ImplementChangesPrompt,
-		"draft_plan_prompt":            rc.DraftPlanPrompt,
 		"create_jira_tickets_prompt":   rc.CreateJiraTicketsPrompt,
 		"codex_skip_git_repo_check":    rc.CodexSkipRepoCheck,
 	}

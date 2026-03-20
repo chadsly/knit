@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chadsly-knit"
+version = "__VERSION__"
+description = "Install and run the local Knit daemon from bundled release artifacts."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Chad Sylvester" }]
+keywords = ["knit", "daemon", "developer-tools", "desktop", "review"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/chadsly/knit"
+Repository = "https://github.com/chadsly/knit.git"
+Issues = "https://github.com/chadsly/knit/issues"
+
+[project.scripts]
+knit = "chadsly_knit.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+chadsly_knit = ["artifacts/*"]

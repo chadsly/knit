@@ -103,6 +103,25 @@ func TestValidateRejectsMismatchedVersionPin(t *testing.T) {
 	}
 }
 
+func TestDefaultUsesEmbeddedVersionDefaults(t *testing.T) {
+	prevBuildID := EmbeddedBuildID
+	prevVersionPin := EmbeddedVersionPin
+	EmbeddedBuildID = "0.1.2"
+	EmbeddedVersionPin = "0.1.2"
+	t.Cleanup(func() {
+		EmbeddedBuildID = prevBuildID
+		EmbeddedVersionPin = prevVersionPin
+	})
+
+	cfg := Default()
+	if cfg.BuildID != "0.1.2" {
+		t.Fatalf("expected embedded build id default, got %q", cfg.BuildID)
+	}
+	if cfg.VersionPin != "0.1.2" {
+		t.Fatalf("expected embedded version pin default, got %q", cfg.VersionPin)
+	}
+}
+
 func TestValidateRejectsInvalidTranscriptionMode(t *testing.T) {
 	cfg := Default()
 	cfg.TranscriptionMode = "unsupported"

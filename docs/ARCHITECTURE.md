@@ -116,6 +116,7 @@ Packaging is script-driven rather than embedded in the daemon:
 - `scripts/package-release.sh` produces portable archives and installer-helper wrappers
 - `scripts/runtime-smoke.sh`, `scripts/reliability-gate.sh`, `scripts/perf-gate.sh`, and `scripts/dependency-scan.sh` validate release quality
 - `packaging/npm/knit-daemon/` contains the npm wrapper scaffold that installs host-specific packaged binaries and exposes them through the `knit` command
+- `packaging/python/knit/` contains the PyPI wrapper scaffold that installs host-specific packaged binaries and exposes them through the `knit` command
 
 ## Current Boundary
 

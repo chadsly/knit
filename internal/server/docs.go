@@ -59,11 +59,11 @@ func resolveUIDoc(name string) (resolvedUIDoc, error) {
 
 func resolveUIDocFile(filename string) (string, error) {
 	candidates := []string{}
-	if cwd, err := os.Getwd(); err == nil && strings.TrimSpace(cwd) != "" {
-		candidates = append(candidates, docCandidatesFromRoot(cwd, filename)...)
-	}
 	if exe, err := os.Executable(); err == nil && strings.TrimSpace(exe) != "" {
 		candidates = append(candidates, docCandidatesFromRoot(filepath.Dir(exe), filename)...)
+	}
+	if cwd, err := os.Getwd(); err == nil && strings.TrimSpace(cwd) != "" {
+		candidates = append(candidates, docCandidatesFromRoot(cwd, filename)...)
 	}
 
 	seen := map[string]struct{}{}

@@ -6,8 +6,28 @@ DIST_DIR="${1:-$ROOT_DIR/dist}"
 DIST_DIR="$(cd "$DIST_DIR" && pwd)"
 PKG_DIR="$DIST_DIR/packages"
 NPM_TEMPLATE_DIR="$ROOT_DIR/packaging/npm/knit-daemon"
+PYTHON_TEMPLATE_DIR="$ROOT_DIR/packaging/python/knit"
 VERSION="${VERSION:-dev}"
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-0}"
+
+normalize_python_package_version() {
+  local version="$1"
+  if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf '%s' "$version"
+    return
+  fi
+  if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-ci\.([0-9]+)\.([0-9]+)$ ]]; then
+    printf '%s.dev%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    return
+  fi
+  if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-.*$ ]]; then
+    printf '%s.dev0' "${BASH_REMATCH[1]}"
+    return
+  fi
+  printf '%s' "$version"
+}
+
+PYTHON_PACKAGE_VERSION="$(normalize_python_package_version "$VERSION")"
 
 mkdir -p "$PKG_DIR"
 INSTALLER_DIR="$PKG_DIR/installers"
@@ -27,7 +47,7 @@ write_checksums() {
   rm -f "$checksums_path"
   while IFS= read -r -d '' pkg_file; do
     hash_file "$pkg_file" >> "$checksums_path"
-  done < <(find "$PKG_DIR" -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.tgz" -o -name "*.install.sh" -o -name "*.install.command" -o -name "*.install.ps1" \) -print0 | sort -z)
+  done < <(find "$PKG_DIR" -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.tgz" -o -name "*.whl" -o -name "*.install.sh" -o -name "*.install.command" -o -name "*.install.ps1" \) -print0 | sort -z)
   echo " - created $checksums_path"
 }
 
@@ -62,6 +82,33 @@ write_release_manifest() {
   echo " - created $manifest_path"
 }
 
+refresh_packaging_metadata() {
+  local checksums_path="$1"
+  local manifest_path="$2"
+  rm -f "$PKG_DIR/checksums.sig" "$PKG_DIR/release-manifest.sig"
+  write_checksums "$checksums_path"
+  if [[ -n "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]]; then
+    echo "Re-signing package checksums after package generation."
+    local sig_file="$PKG_DIR/checksums.sig"
+    openssl dgst -sha256 -sign "$RELEASE_SIGNING_PRIVATE_KEY" -out "$sig_file" "$checksums_path"
+    echo " - created $sig_file"
+    if [[ -n "${RELEASE_SIGNING_PUBLIC_KEY:-}" ]]; then
+      openssl dgst -sha256 -verify "$RELEASE_SIGNING_PUBLIC_KEY" -signature "$sig_file" "$checksums_path"
+      echo " - verified signature with public key"
+    fi
+  fi
+  write_release_manifest "$manifest_path" "$checksums_path"
+  if [[ -n "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]]; then
+    local manifest_sig="$PKG_DIR/release-manifest.sig"
+    openssl dgst -sha256 -sign "$RELEASE_SIGNING_PRIVATE_KEY" -out "$manifest_sig" "$manifest_path"
+    echo " - created $manifest_sig"
+    if [[ -n "${RELEASE_SIGNING_PUBLIC_KEY:-}" ]]; then
+      openssl dgst -sha256 -verify "$RELEASE_SIGNING_PUBLIC_KEY" -signature "$manifest_sig" "$manifest_path"
+      echo " - verified release manifest signature with public key"
+    fi
+  fi
+}
+
 echo "Packaging release artifacts from: $DIST_DIR/bin"
 if [[ ! -d "$DIST_DIR/bin" ]]; then
   echo "missing build output directory: $DIST_DIR/bin" >&2
@@ -75,8 +122,11 @@ while IFS= read -r -d '' target_dir; do
   os="${target_name%%_*}"
   archive_base="knit_${VERSION}_${target_name}"
   installer_base="$INSTALLER_DIR/knit_${VERSION}_${target_name}"
+  staging_dir="$(mktemp -d)"
+  cp -R "$target_dir"/. "$staging_dir"/
+  cp -R "$ROOT_DIR/docs" "$staging_dir/docs"
   if [[ "$os" == "windows" ]]; then
-    (cd "$target_dir" && zip -qr "$PKG_DIR/${archive_base}.zip" .)
+    (cd "$staging_dir" && zip -qr "$PKG_DIR/${archive_base}.zip" .)
     echo " - created $PKG_DIR/${archive_base}.zip"
     cat > "${installer_base}.install.ps1" <<EOF
 \$ErrorActionPreference = "Stop"
@@ -89,7 +139,7 @@ Write-Host "Installed Knit to \$InstallDir"
 EOF
     echo " - created ${installer_base}.install.ps1"
   else
-    tar -czf "$PKG_DIR/${archive_base}.tar.gz" -C "$target_dir" .
+    tar -czf "$PKG_DIR/${archive_base}.tar.gz" -C "$staging_dir" .
     echo " - created $PKG_DIR/${archive_base}.tar.gz"
     if [[ "$os" == "darwin" ]]; then
       cat > "${installer_base}.install.command" <<EOF
@@ -119,6 +169,7 @@ EOF
       echo " - created ${installer_base}.install.sh"
     fi
   fi
+  rm -rf "$staging_dir"
 done < <(find "$DIST_DIR/bin" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 
 if [[ "$target_dir_count" -eq 0 ]]; then
@@ -200,28 +251,38 @@ if [[ -d "$NPM_TEMPLATE_DIR" ]]; then
   fi
   (cd "$npm_pkg_dir" && npm pack --pack-destination "$PKG_DIR")
   echo " - created npm package tarball in $PKG_DIR"
-  rm -f "$PKG_DIR/checksums.sig" "$PKG_DIR/release-manifest.sig"
-  write_checksums "$pkg_checksums"
-  if [[ -n "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]]; then
-    echo "Re-signing package checksums after npm tarball generation."
-    sig_file="$PKG_DIR/checksums.sig"
-    openssl dgst -sha256 -sign "$RELEASE_SIGNING_PRIVATE_KEY" -out "$sig_file" "$pkg_checksums"
-    echo " - created $sig_file"
-    if [[ -n "${RELEASE_SIGNING_PUBLIC_KEY:-}" ]]; then
-      openssl dgst -sha256 -verify "$RELEASE_SIGNING_PUBLIC_KEY" -signature "$sig_file" "$pkg_checksums"
-      echo " - verified signature with public key"
-    fi
+  refresh_packaging_metadata "$pkg_checksums" "$release_manifest"
+fi
+
+if [[ -d "$PYTHON_TEMPLATE_DIR" ]]; then
+  python_pkg_dir="$PKG_DIR/python/knit"
+  rm -rf "$python_pkg_dir"
+  mkdir -p "$python_pkg_dir/src/chadsly_knit" "$python_pkg_dir/src/chadsly_knit/artifacts"
+  sed "s/__VERSION__/${PYTHON_PACKAGE_VERSION//\//\\/}/g" "$PYTHON_TEMPLATE_DIR/pyproject.toml.template" > "$python_pkg_dir/pyproject.toml"
+  sed "s/__VERSION__/${PYTHON_PACKAGE_VERSION//\//\\/}/g" "$PYTHON_TEMPLATE_DIR/src/chadsly_knit/__init__.py.template" > "$python_pkg_dir/src/chadsly_knit/__init__.py"
+  cp "$PYTHON_TEMPLATE_DIR/README.md" "$python_pkg_dir/README.md"
+  cp "$PYTHON_TEMPLATE_DIR/src/chadsly_knit/cli.py" "$python_pkg_dir/src/chadsly_knit/cli.py"
+  cp "$PYTHON_TEMPLATE_DIR/src/chadsly_knit/install.py" "$python_pkg_dir/src/chadsly_knit/install.py"
+  cp "$release_manifest" "$python_pkg_dir/src/chadsly_knit/artifacts/release-manifest.json"
+  cp "$pkg_checksums" "$python_pkg_dir/src/chadsly_knit/artifacts/checksums.txt"
+  if [[ -f "$PKG_DIR/checksums.sig" ]]; then
+    cp "$PKG_DIR/checksums.sig" "$python_pkg_dir/src/chadsly_knit/artifacts/checksums.sig"
   fi
-  write_release_manifest "$release_manifest" "$pkg_checksums"
-  if [[ -n "${RELEASE_SIGNING_PRIVATE_KEY:-}" ]]; then
-    manifest_sig="$PKG_DIR/release-manifest.sig"
-    openssl dgst -sha256 -sign "$RELEASE_SIGNING_PRIVATE_KEY" -out "$manifest_sig" "$release_manifest"
-    echo " - created $manifest_sig"
-    if [[ -n "${RELEASE_SIGNING_PUBLIC_KEY:-}" ]]; then
-      openssl dgst -sha256 -verify "$RELEASE_SIGNING_PUBLIC_KEY" -signature "$manifest_sig" "$release_manifest"
-      echo " - verified release manifest signature with public key"
-    fi
+  while IFS= read -r -d '' artifact_file; do
+    cp "$artifact_file" "$python_pkg_dir/src/chadsly_knit/artifacts/$(basename "$artifact_file")"
+  done < <(find "$PKG_DIR" -maxdepth 1 -type f \( -name "*.tar.gz" -o -name "*.zip" \) -print0 | sort -z)
+  echo " - created python package scaffold at $python_pkg_dir"
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "python3 is required to pack chadsly-knit release artifacts" >&2
+    exit 1
   fi
+  if ! python3 -m build --version >/dev/null 2>&1; then
+    echo "python build module is required to pack chadsly-knit release artifacts" >&2
+    exit 1
+  fi
+  (cd "$python_pkg_dir" && python3 -m build --sdist --wheel --outdir "$PKG_DIR")
+  echo " - created python package artifacts in $PKG_DIR"
+  refresh_packaging_metadata "$pkg_checksums" "$release_manifest"
 fi
 
 echo "Packaging complete. Output: $PKG_DIR"

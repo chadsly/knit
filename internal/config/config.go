@@ -2,6 +2,11 @@ package config
 
 import "time"
 
+var (
+	EmbeddedBuildID    = ""
+	EmbeddedVersionPin = ""
+)
+
 // Config contains defaults aligned to the current v1 decisions.
 type Config struct {
 	HTTPListenAddr        string
@@ -54,8 +59,8 @@ func Default() Config {
 		SQLitePath:          "knit.db",
 		LocalProfile:        "local-default",
 		EnvironmentName:     "local-dev",
-		BuildID:             "",
-		VersionPin:          "",
+		BuildID:             EmbeddedBuildID,
+		VersionPin:          EmbeddedVersionPin,
 		ManagedDeploymentID: "",
 		ControlCapabilities: []string{"capture", "submit", "config", "purge", "read"},
 

@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NPM_TOKEN_SECRET: ${{ secrets.NPM_TOKEN }}
+      PYPI_API_TOKEN_SECRET: ${{ secrets.PYPI_API_TOKEN }}
       RELEASE_SIGNING_PRIVATE_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
       RELEASE_SIGNING_PUBLIC_KEY_SECRET: ${{ secrets.RELEASE_SIGNING_PUBLIC_KEY }}
     steps:
@@ -41,6 +42,13 @@ jobs:
         with:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python release tooling
+        run: python3 -m pip install --upgrade build twine
 
       - name: Validate release inputs
         id: release
@@ -75,6 +83,10 @@ jobs:
         run: |
           if [[ -z "${NPM_TOKEN_SECRET}" ]]; then
             echo "NPM_TOKEN secret is required for stable npm releases."
+            exit 1
+          fi
+          if [[ -z "${PYPI_API_TOKEN_SECRET}" ]]; then
+            echo "PYPI_API_TOKEN secret is required for stable PyPI releases."
             exit 1
           fi
           if [[ -z "${RELEASE_SIGNING_PRIVATE_KEY_SECRET}" || -z "${RELEASE_SIGNING_PUBLIC_KEY_SECRET}" ]]; then
@@ -146,6 +158,17 @@ jobs:
         run: |
           npm publish --access public --tag latest --provenance dist-ci/packages/chadsly-knit-${VERSION}.tgz
 
+      - name: Publish chadsly-knit to PyPI
+        shell: bash
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ env.PYPI_API_TOKEN_SECRET }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          python3 -m twine upload \
+            dist-ci/packages/chadsly_knit-${VERSION}.tar.gz \
+            dist-ci/packages/chadsly_knit-${VERSION}-py3-none-any.whl
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -153,4 +176,12 @@ jobs:
           name: ${{ steps.release.outputs.tag }}
           generate_release_notes: true
           files: |
-            dist-ci/packages/**
+            dist-ci/packages/*.tar.gz
+            dist-ci/packages/*.zip
+            dist-ci/packages/*.tgz
+            dist-ci/packages/*.whl
+            dist-ci/packages/installers/*.install.sh
+            dist-ci/packages/installers/*.install.command
+            dist-ci/packages/installers/*.install.ps1
+            dist-ci/packages/checksums.txt
+            dist-ci/packages/checksums.sig

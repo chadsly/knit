@@ -1088,7 +1088,6 @@ const floatingComposerHTML = `<!doctype html>
             <span class="field-label">Prompt template</span>
             <select id="fcDeliveryIntentProfile" onchange="syncDeliveryIntentPromptTextFC(true)">
               <option value="implement_changes">Implement changes</option>
-              <option value="draft_plan">Draft plan</option>
               <option value="create_jira_tickets">Create Jira tickets</option>
             </select>
           </label>
@@ -2429,8 +2428,6 @@ function syncFCProviderOptions(data) {
 function deliveryPromptForProfileFC(runtimeCodex, profile) {
   const rc = runtimeCodex || {};
   switch (String(profile || '').trim()) {
-    case 'draft_plan':
-      return String(rc.draft_plan_prompt || '').trim() || defaultDeliveryIntentPromptFC('draft_plan');
     case 'create_jira_tickets':
       return String(rc.create_jira_tickets_prompt || '').trim() || defaultDeliveryIntentPromptFC('create_jira_tickets');
     default:
@@ -2442,7 +2439,7 @@ function syncDeliveryPromptUIFromStateFC(runtimeCodex, preservingRuntimeDraft = 
   if (!fcDeliveryIntentProfileEl || !fcDeliveryInstructionTextEl || preservingRuntimeDraft) return;
   const rc = runtimeCodex || {};
   const profile = String(rc.delivery_intent_profile || fcDeliveryIntentProfileEl.value || 'implement_changes').trim();
-  fcDeliveryIntentProfileEl.value = profile === 'draft_plan' || profile === 'create_jira_tickets' ? profile : 'implement_changes';
+  fcDeliveryIntentProfileEl.value = profile === 'create_jira_tickets' ? profile : 'implement_changes';
   fcDeliveryInstructionTextEl.value = deliveryPromptForProfileFC(rc, fcDeliveryIntentProfileEl.value);
 }
 
@@ -2453,7 +2450,6 @@ function currentDeliveryPromptPayloadFC() {
   return {
     delivery_intent_profile: selected,
     implement_changes_prompt: selected === 'implement_changes' ? selectedText : deliveryPromptForProfileFC(rc, 'implement_changes'),
-    draft_plan_prompt: selected === 'draft_plan' ? selectedText : deliveryPromptForProfileFC(rc, 'draft_plan'),
     create_jira_tickets_prompt: selected === 'create_jira_tickets' ? selectedText : deliveryPromptForProfileFC(rc, 'create_jira_tickets'),
   };
 }
@@ -2561,7 +2557,6 @@ async function applyCodexRuntimeFC() {
       claude_api_model: readRuntimeSingleLineFC(fcClaudeAPIModelEl, 'Claude API model', 128),
       delivery_intent_profile: deliveryPromptPayload.delivery_intent_profile,
       implement_changes_prompt: deliveryPromptPayload.implement_changes_prompt,
-      draft_plan_prompt: deliveryPromptPayload.draft_plan_prompt,
       create_jira_tickets_prompt: deliveryPromptPayload.create_jira_tickets_prompt,
       post_submit_rebuild_cmd: readRuntimeSingleLineFC(fcPostSubmitRebuildCmdEl, 'Post-submit rebuild command'),
       post_submit_verify_cmd: readRuntimeSingleLineFC(fcPostSubmitVerifyCmdEl, 'Post-submit verify command'),
@@ -3683,21 +3678,6 @@ function selectedProviderFC() {
 
 function defaultDeliveryIntentPromptFC(profile) {
   switch (String(profile || '').trim()) {
-    case 'draft_plan':
-      return [
-        'You are receiving a canonical Knit feedback payload JSON.',
-        'Produce a concrete implementation plan for the requested software changes without editing the repository.',
-        '',
-        'Rules:',
-        '- Do not edit files or make repository changes.',
-        '- Focus on scope, intended behavior, risks, sequencing, and validation steps.',
-        '- Call out assumptions and edge cases clearly.',
-        '- Return a concise, actionable plan rather than implementation code.',
-        '- If the repository is already dirty, use that only as context; do not modify it.',
-        '',
-        'External tracker operations are disabled for this run.',
-        'Do not call Jira/Atlassian/GitHub issue tools.'
-      ].join('\n');
     case 'create_jira_tickets':
       return [
         'You are receiving a canonical Knit feedback payload JSON.',
@@ -3735,14 +3715,12 @@ function defaultDeliveryIntentPromptFC(profile) {
 
 function selectedDeliveryIntentProfileFC() {
   const profile = String(fcDeliveryIntentProfileEl?.value || 'implement_changes').trim();
-  if (profile === 'draft_plan' || profile === 'create_jira_tickets') return profile;
+  if (profile === 'create_jira_tickets') return profile;
   return 'implement_changes';
 }
 
 function selectedDeliveryIntentLabelFC() {
   switch (selectedDeliveryIntentProfileFC()) {
-    case 'draft_plan':
-      return 'Draft plan';
     case 'create_jira_tickets':
       return 'Create Jira tickets';
     default:
