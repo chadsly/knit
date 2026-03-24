@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chadsly-knit"
 version = "__VERSION__"
-description = "Install and run the local Knit daemon from bundled release artifacts."
+description = "Install and run the local Knit daemon, then connect Knit Browser Composer from the Chrome Web Store or a local unpacked extension."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

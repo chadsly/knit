@@ -12,8 +12,8 @@ func TestStartupBannerLinesIncludeWelcomeVersionAndURL(t *testing.T) {
 	cfg.HTTPListenAddr = "127.0.0.1:8888"
 
 	lines := startupBannerLines(cfg)
-	if len(lines) != 3 {
-		t.Fatalf("expected 3 startup lines, got %d: %#v", len(lines), lines)
+	if len(lines) != 7 {
+		t.Fatalf("expected 7 startup lines, got %d: %#v", len(lines), lines)
 	}
 	if lines[0] != "Welcome to Knit." {
 		t.Fatalf("unexpected welcome line: %q", lines[0])
@@ -23,6 +23,18 @@ func TestStartupBannerLinesIncludeWelcomeVersionAndURL(t *testing.T) {
 	}
 	if lines[2] != "Open the local UI: http://127.0.0.1:8888" {
 		t.Fatalf("unexpected UI line: %q", lines[2])
+	}
+	if lines[3] != "Browser extension: Knit Browser Composer" {
+		t.Fatalf("unexpected extension line: %q", lines[3])
+	}
+	if lines[4] != "Chrome Web Store: "+chromeWebStoreURL() {
+		t.Fatalf("unexpected Chrome Web Store line: %q", lines[4])
+	}
+	if lines[5] != "Local install: chrome://extensions -> Load unpacked -> extension/chromium" {
+		t.Fatalf("unexpected local install line: %q", lines[5])
+	}
+	if lines[6] != "Pair from the UI: Capture, review, and send -> Chrome Extension" {
+		t.Fatalf("unexpected pairing line: %q", lines[6])
 	}
 }
 

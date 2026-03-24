@@ -14,6 +14,13 @@ python3 -m pip install chadsly-knit
 knit start
 ```
 
+Install the browser extension after the daemon is running:
+
+- Chrome Web Store: [Knit Browser Composer](https://chromewebstore.google.com/detail/knit-browser-composer/aepollbmimigbaapeelemgmdkfnhaclb?authuser=0&hl=en)
+- Local unpacked install: open `chrome://extensions`, enable `Developer mode`, click `Load unpacked`, and select `extension/chromium` from the Knit repository
+
+Pair it from the Knit UI with `Capture, review, and send -> Chrome Extension`.
+
 ## Commands
 
 - `knit start`
@@ -29,4 +36,4 @@ knit start
 - On first use, the Python wrapper verifies the packaged archive checksum against the bundled release manifest.
 - It extracts the host-specific daemon into the local user application-data directory and then runs it.
 
-The daemon still prints the local UI URL at startup. Knit's browser extension and main review UI remain separate from this PyPI wrapper; this package is only the daemon/runtime install path.
+The daemon now prints the local UI URL, the Chrome Web Store link, the local unpacked extension path, and the pairing path in the Knit UI at startup. This package still only installs the daemon/runtime; the browser extension is installed separately.

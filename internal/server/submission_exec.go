@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -28,6 +29,15 @@ const defaultSubmitMaxAttempts = 2
 const defaultSubmitRetryBackoffSeconds = 2
 const defaultOfflineRetrySeconds = 15
 const maxSubmitRequestPreviewLen = 140
+const maxSubmitOutcomeLogBytes = 256 << 10
+const maxSubmitAgentSummaryLen = 600
+
+const (
+	submitOutcomeNoInput        = "no_input"
+	submitOutcomeTrustedDir     = "trusted_directory"
+	submitOutcomeWrongWorkspace = "wrong_workspace"
+	submitOutcomeReadOnly       = "read_only"
+)
 
 type submitJob struct {
 	AttemptID       string
@@ -95,6 +105,10 @@ type submitAttempt struct {
 	CompletedAt        *time.Time           `json:"completed_at,omitempty"`
 	PostSubmit         *postSubmitResult    `json:"post_submit,omitempty"`
 	ExecutionRef       string               `json:"execution_ref,omitempty"`
+	AgentSummary       string               `json:"agent_summary,omitempty"`
+	OutcomeCode        string               `json:"outcome_code,omitempty"`
+	OutcomeTitle       string               `json:"outcome_title,omitempty"`
+	OutcomeMessage     string               `json:"outcome_message,omitempty"`
 	Timeline           []submitAttemptEvent `json:"timeline,omitempty"`
 	Source             string               `json:"source,omitempty"`
 	Actor              string               `json:"actor,omitempty"`
@@ -602,6 +616,9 @@ func (s *Server) processSubmitJob(job submitJob) {
 	}
 
 	completedAt := time.Now().UTC()
+	logText := readSubmitOutcomeLogText(agentsExecutionLogPath(submitCtx))
+	agentSummary := extractSubmitAgentSummary(logText)
+	outcomeCode, outcomeTitle, outcomeMessage := classifySubmitAttemptOutcome(job.Package, job.WorkdirUsed, agentsExecutionLogPath(submitCtx))
 	shouldRunParallelPost := false
 	s.submitMu.Lock()
 	delete(s.submitRunning, job.AttemptID)
@@ -626,6 +643,10 @@ func (s *Server) processSubmitJob(job submitJob) {
 		a.CompletedAt = &completedAt
 		a.PostSubmit = postSubmit
 		a.NextRetryAt = nil
+		a.AgentSummary = agentSummary
+		a.OutcomeCode = outcomeCode
+		a.OutcomeTitle = outcomeTitle
+		a.OutcomeMessage = outcomeMessage
 		if isCanceledSubmitError(runErr) {
 			a.Status = submitStatusCanceled
 			a.Error = ""
@@ -1152,6 +1173,271 @@ func writeSubmitExecutionLog(path string, format string, args ...any) {
 		return
 	}
 	_, _ = fmt.Fprintf(f, "[%s] %s\n", time.Now().UTC().Format(time.RFC3339), msg)
+}
+
+func classifySubmitAttemptOutcome(pkg session.CanonicalPackage, workdir, logPath string) (string, string, string) {
+	if len(pkg.ChangeRequests) == 0 && len(pkg.Artifacts) == 0 {
+		return submitOutcomeNoInput, "No input", "Knit submitted this run without any captured change requests or artifacts, so the coding agent had nothing to change."
+	}
+	logText := strings.ToLower(readSubmitOutcomeLogText(logPath))
+	if containsAny(logText,
+		"not inside a trusted directory",
+		"trusted directory",
+		"git repo check",
+		"--skip-git-repo-check was not specified",
+	) {
+		message := "Go back to Capture, Review, and Send, open Settings, then check Workspace first. If the wrong repository is selected, choose the correct workspace for this project and rerun. If the workspace is already correct, open Settings > Agent and switch Sandbox to danger-full-access before rerunning."
+		if strings.TrimSpace(workdir) != "" {
+			message += " Workspace used: " + strings.TrimSpace(workdir) + "."
+		}
+		return submitOutcomeTrustedDir, "Trusted directory required", message
+	}
+	if containsAny(logText,
+		"not a git repository",
+		"wrong workspace",
+		"workspace does not match",
+		"workspace didn't match",
+		"workspace did not match",
+	) {
+		message := "Go back to Capture, Review, and Send, open Settings > Workspace, and choose the repository that matches this request before rerunning."
+		if strings.TrimSpace(workdir) != "" {
+			message += " Workspace used: " + strings.TrimSpace(workdir) + "."
+		}
+		return submitOutcomeWrongWorkspace, "Wrong workspace", message
+	}
+	if containsAny(logText,
+		"sandbox: read-only",
+		"workspace is read-only",
+		"read-only file system",
+		"operation not permitted",
+		"apply_patch tool call failed",
+		"failed with `operation not permitted`",
+	) {
+		return submitOutcomeReadOnly, "Read-only", "Go back to Capture, Review, and Send, open Settings > Agent, and switch Sandbox to danger-full-access before rerunning."
+	}
+	return "", "", ""
+}
+
+func readSubmitOutcomeLogText(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, maxSubmitOutcomeLogBytes))
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func extractSubmitAgentSummary(logText string) string {
+	commentary := extractSubmitAgentCommentary(logText)
+	if commentary == "" {
+		return ""
+	}
+	if summary := extractExplicitSubmitSummary(commentary); summary != "" {
+		return summary
+	}
+	blocks := strings.Split(strings.ReplaceAll(commentary, "\r\n", "\n"), "\n\n")
+	for i := len(blocks) - 1; i >= 0; i-- {
+		candidate := strings.TrimSpace(blocks[i])
+		if candidate == "" {
+			continue
+		}
+		if submitSummaryLooksActionable(candidate) {
+			return truncateSubmitAgentSummary(candidate)
+		}
+	}
+	lines := nonEmptySubmitLines(commentary)
+	for i := len(lines) - 1; i >= 0; i-- {
+		if submitSummaryLooksActionable(lines[i]) {
+			return truncateSubmitAgentSummary(lines[i])
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return truncateSubmitAgentSummary(lines[len(lines)-1])
+}
+
+func extractSubmitAgentCommentary(logText string) string {
+	if strings.TrimSpace(logText) == "" {
+		return ""
+	}
+	lines := strings.Split(strings.ReplaceAll(logText, "\r\n", "\n"), "\n")
+	commentary := make([]string, 0, len(lines))
+	mode := "work"
+	omittingPrompt := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "user" {
+			omittingPrompt = true
+			mode = "work"
+			continue
+		}
+		if omittingPrompt {
+			if trimmed == "codex" || isSubmitLiveOutputWorkMarker(trimmed) {
+				omittingPrompt = false
+			} else {
+				continue
+			}
+		}
+		if trimmed == "codex" {
+			mode = "commentary"
+			continue
+		}
+		if isSubmitLikelyPayloadLine(line) {
+			continue
+		}
+		if isSubmitLiveOutputWorkMarker(trimmed) {
+			mode = "work"
+			continue
+		}
+		if mode == "commentary" || isSubmitLikelyCommentaryLine(trimmed) {
+			commentary = append(commentary, line)
+		}
+	}
+	return strings.TrimSpace(strings.Join(commentary, "\n"))
+}
+
+func extractExplicitSubmitSummary(commentary string) string {
+	lines := nonEmptySubmitLines(commentary)
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		lower := strings.ToLower(line)
+		for _, prefix := range []string{"summary:", "short summary:", "final summary:", "change summary:"} {
+			if strings.HasPrefix(lower, prefix) {
+				return truncateSubmitAgentSummary(strings.TrimSpace(line[len(prefix):]))
+			}
+		}
+	}
+	return ""
+}
+
+func nonEmptySubmitLines(text string) []string {
+	raw := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	lines := make([]string, 0, len(raw))
+	for _, line := range raw {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			lines = append(lines, trimmed)
+		}
+	}
+	return lines
+}
+
+func submitSummaryLooksActionable(text string) bool {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if lower == "" {
+		return false
+	}
+	if strings.HasPrefix(lower, "i'm ") || strings.HasPrefix(lower, "i am ") || strings.HasPrefix(lower, "i found") || strings.HasPrefix(lower, "next i") || strings.HasPrefix(lower, "i can") || strings.HasPrefix(lower, "the current ") {
+		return false
+	}
+	return containsAny(lower,
+		"changed",
+		"updated",
+		"added",
+		"fixed",
+		"implemented",
+		"removed",
+		"wired",
+		"rewrote",
+		"reworked",
+		"refactored",
+		"documented",
+		"made no changes",
+		"no files changed",
+		"tests passed",
+		"now",
+	)
+}
+
+func truncateSubmitAgentSummary(text string) string {
+	value := strings.TrimSpace(text)
+	if value == "" {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= maxSubmitAgentSummaryLen {
+		return value
+	}
+	return strings.TrimSpace(string(runes[:maxSubmitAgentSummaryLen-1])) + "…"
+}
+
+func isSubmitLiveOutputWorkMarker(trimmed string) bool {
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "[") && strings.Contains(trimmed, "T") {
+		return true
+	}
+	if trimmed == "exec" || strings.HasPrefix(trimmed, "exec ") {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "mcp:") {
+		return true
+	}
+	if trimmed == "apply_patch" || strings.HasPrefix(trimmed, "apply_patch ") {
+		return true
+	}
+	if trimmed == "--------" || strings.HasPrefix(trimmed, "OpenAI Codex v") {
+		return true
+	}
+	if hasAnyPrefixFold(trimmed, "workdir:", "model:", "provider:", "approval:", "sandbox:", "reasoning effort:", "reasoning summaries:", "session id:") {
+		return true
+	}
+	if hasAnyPrefixFold(trimmed, "/bin/", "bash ", "sh ", "git ", "rg ", "sed ", "cat ", "go ", "npm ", "pnpm ") {
+		return true
+	}
+	if len(trimmed) > 4 && trimmed[3] == ':' && trimmed[0] >= '0' && trimmed[0] <= '9' {
+		return true
+	}
+	return strings.Contains(trimmed, " succeeded in ") || strings.Contains(trimmed, " failed in ")
+}
+
+func isSubmitLikelyPayloadLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, `{"created":`) || strings.Contains(trimmed, `"inline_data_url"`) {
+		return true
+	}
+	if strings.Contains(trimmed, "data:image/") || strings.Contains(trimmed, "data:video/") || strings.Contains(trimmed, "data:audio/") {
+		return true
+	}
+	return len(line) > 4000
+}
+
+func isSubmitLikelyCommentaryLine(trimmed string) bool {
+	lower := strings.ToLower(strings.TrimSpace(trimmed))
+	return strings.HasPrefix(lower, "i'm") ||
+		strings.HasPrefix(lower, "i am") ||
+		strings.HasPrefix(lower, "i'll") ||
+		strings.HasPrefix(lower, "i will") ||
+		strings.HasPrefix(lower, "i have") ||
+		strings.HasPrefix(lower, "i found") ||
+		strings.HasPrefix(lower, "i can") ||
+		strings.HasPrefix(lower, "next i") ||
+		strings.HasPrefix(lower, "the current ") ||
+		strings.HasPrefix(lower, "this is ") ||
+		strings.HasPrefix(lower, "that means")
+}
+
+func hasAnyPrefixFold(s string, prefixes ...string) bool {
+	lower := strings.ToLower(strings.TrimSpace(s))
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(lower, strings.ToLower(strings.TrimSpace(prefix))) {
+			return true
+		}
+	}
+	return false
 }
 
 func maxInt(a, b int) int {

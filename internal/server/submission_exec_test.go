@@ -450,6 +450,143 @@ func TestNamedCLIProvidersCaptureExecutionLog(t *testing.T) {
 	}
 }
 
+func TestSubmitAttemptOutcomeClassifiesCommonNoOps(t *testing.T) {
+	tests := []struct {
+		name         string
+		pkg          session.CanonicalPackage
+		logLines     []string
+		wantCode     string
+		wantTitle    string
+		wantContains string
+	}{
+		{
+			name:         "no input",
+			pkg:          session.CanonicalPackage{SessionID: "sess-no-input"},
+			wantCode:     submitOutcomeNoInput,
+			wantTitle:    "No input",
+			wantContains: "had nothing to change",
+		},
+		{
+			name: "trusted directory required",
+			pkg: session.CanonicalPackage{
+				SessionID:      "sess-trusted-dir",
+				ChangeRequests: []session.ChangeReq{{EventID: "evt-1", Summary: "Update the capture guide icon"}},
+			},
+			logLines:     []string{"Not inside a trusted directory and --skip-git-repo-check was not specified."},
+			wantCode:     submitOutcomeTrustedDir,
+			wantTitle:    "Trusted directory required",
+			wantContains: "open Settings, then check Workspace first",
+		},
+		{
+			name: "wrong workspace",
+			pkg: session.CanonicalPackage{
+				SessionID:      "sess-wrong-workspace",
+				ChangeRequests: []session.ChangeReq{{EventID: "evt-1", Summary: "Add the requested dashboard card behavior"}},
+			},
+			logLines:     []string{"fatal: not a git repository (or any of the parent directories): .git"},
+			wantCode:     submitOutcomeWrongWorkspace,
+			wantTitle:    "Wrong workspace",
+			wantContains: "open Settings > Workspace",
+		},
+		{
+			name: "read only",
+			pkg: session.CanonicalPackage{
+				SessionID:      "sess-read-only",
+				ChangeRequests: []session.ChangeReq{{EventID: "evt-1", Summary: "Update the dashboard cards"}},
+			},
+			logLines:     []string{"sandbox: read-only", "apply_patch tool call failed: Operation not permitted"},
+			wantCode:     submitOutcomeReadOnly,
+			wantTitle:    "Read-only",
+			wantContains: "open Settings > Agent",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := config.Default()
+			cfg.ControlToken = "test-token"
+			if len(tt.logLines) > 0 {
+				t.Setenv("KNIT_CLI_ADAPTER_CMD", acceptedCLITestCommand(tt.logLines...))
+			} else {
+				t.Setenv("KNIT_CLI_ADAPTER_CMD", acceptedCLITestCommand())
+			}
+			srv := newTestServer(t, cfg)
+
+			attempt := srv.enqueueSubmitJob("codex_cli", tt.pkg, map[string]any{"id": tt.name}, agents.DeliveryIntent{}, "test", "test")
+			waitForSubmitDrain(t, srv, 3*time.Second)
+
+			snapshot, ok := srv.submitAttemptByID(attempt.AttemptID)
+			if !ok {
+				t.Fatalf("attempt not found")
+			}
+			if snapshot.Status != "submitted" {
+				t.Fatalf("expected submitted attempt, got %s", snapshot.Status)
+			}
+			if snapshot.OutcomeCode != tt.wantCode {
+				t.Fatalf("expected outcome code %q, got %q", tt.wantCode, snapshot.OutcomeCode)
+			}
+			if snapshot.OutcomeTitle != tt.wantTitle {
+				t.Fatalf("expected outcome title %q, got %q", tt.wantTitle, snapshot.OutcomeTitle)
+			}
+			if !strings.Contains(snapshot.OutcomeMessage, tt.wantContains) {
+				t.Fatalf("expected outcome message to contain %q, got %q", tt.wantContains, snapshot.OutcomeMessage)
+			}
+		})
+	}
+}
+
+func TestExtractSubmitAgentSummaryPrefersExplicitSummary(t *testing.T) {
+	logText := strings.Join([]string{
+		"user",
+		"payload omitted",
+		"codex",
+		"I'm inspecting the dashboard cards now.",
+		"",
+		"Summary: Updated the completed cards to show waypoint summaries and wired the API response into the new display.",
+	}, "\n")
+
+	got := extractSubmitAgentSummary(logText)
+	want := "Updated the completed cards to show waypoint summaries and wired the API response into the new display."
+	if got != want {
+		t.Fatalf("expected explicit summary %q, got %q", want, got)
+	}
+}
+
+func TestExtractSubmitAgentSummaryFallsBackToActionableTail(t *testing.T) {
+	logText := strings.Join([]string{
+		"[2026-03-24T15:54:50Z] Attempt attempt-1 queued for provider codex_cli",
+		"codex",
+		"I'm tracing the React card component and the API payload first.",
+		"",
+		"Updated the dashboard cards to use the special heading summaries and added coverage for the rendered detail text.",
+	}, "\n")
+
+	got := extractSubmitAgentSummary(logText)
+	want := "Updated the dashboard cards to use the special heading summaries and added coverage for the rendered detail text."
+	if got != want {
+		t.Fatalf("expected actionable tail summary %q, got %q", want, got)
+	}
+}
+
+func acceptedCLITestCommand(lines ...string) string {
+	if runtime.GOOS == "windows" {
+		parts := make([]string, 0, len(lines)+1)
+		for _, line := range lines {
+			escaped := strings.ReplaceAll(line, `'`, `''`)
+			parts = append(parts, fmt.Sprintf("Add-Content -Path $env:KNIT_CLI_LOG_FILE -Value '%s'", escaped))
+		}
+		parts = append(parts, `Write-Output '{"run_id":"test-run","status":"accepted","ref":"test-ref"}'`)
+		return `powershell -Command "` + strings.Join(parts, "; ") + `"`
+	}
+	parts := make([]string, 0, len(lines)+1)
+	for _, line := range lines {
+		escaped := strings.ReplaceAll(line, `'`, `'"'"'`)
+		parts = append(parts, fmt.Sprintf("printf '%%s\\n' '%s' >> \"$KNIT_CLI_LOG_FILE\"", escaped))
+	}
+	parts = append(parts, `echo '{"run_id":"test-run","status":"accepted","ref":"test-ref"}'`)
+	return `sh -lc "` + strings.Join(parts, "; ") + `"`
+}
+
 func TestSubmitQueueRecoveryLoadsQueuedJobsAfterRestart(t *testing.T) {
 	t.Setenv("KNIT_SUBMIT_EXECUTION_MODE", submitExecutionSeries)
 	t.Setenv("KNIT_SUBMIT_MAX_ATTEMPTS", "1")

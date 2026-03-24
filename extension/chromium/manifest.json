@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Knit Browser Composer",
   "description": "Pair with a local Knit daemon to capture browser-grounded notes, preview them, and submit them without the compact composer.",
-  "version": "0.1.1",
+  "version": "0.1.5",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

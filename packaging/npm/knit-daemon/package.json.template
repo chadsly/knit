@@ -1,7 +1,7 @@
 {
   "name": "@chadsly/knit",
   "version": "__VERSION__",
-  "description": "Install and run the local Knit daemon from bundled release artifacts.",
+  "description": "Install and run the local Knit daemon, then connect Knit Browser Composer from the Chrome Web Store or a local unpacked extension.",
   "license": "MIT",
   "private": false,
   "homepage": "https://github.com/chadsly/knit#readme",

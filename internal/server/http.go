@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -142,6 +143,17 @@ type approveRequest struct {
 
 type cancelSubmitAttemptRequest struct {
 	AttemptID string `json:"attempt_id"`
+}
+
+type rerunSubmitAttemptRequest struct {
+	AttemptID string `json:"attempt_id"`
+}
+
+func canonicalPackageHasInput(pkg *session.CanonicalPackage) bool {
+	if pkg == nil {
+		return false
+	}
+	return len(pkg.ChangeRequests) > 0 || len(pkg.Artifacts) > 0
 }
 
 type submitRequest struct {
@@ -312,6 +324,7 @@ func New(
 	mux.HandleFunc("/api/session/submit", s.handleSubmit)
 	mux.HandleFunc("/api/session/attempt/log", s.handleAttemptLog)
 	mux.HandleFunc("/api/session/attempt/cancel", s.handleCancelSubmitAttempt)
+	mux.HandleFunc("/api/session/attempt/rerun", s.handleRerunSubmitAttempt)
 	mux.HandleFunc("/api/session/open-last-log", s.handleOpenLastLog)
 	mux.HandleFunc("/api/session/history", s.handleHistory)
 	mux.HandleFunc("/api/extension/pair/start", s.handleExtensionPairStart)
@@ -1602,6 +1615,10 @@ func (s *Server) handlePayloadPreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if !canonicalPackageHasInput(transmissionPkg) {
+		http.Error(w, "capture at least one note before previewing or submitting", http.StatusConflict)
+		return
+	}
 	rc := s.currentRuntimeCodex()
 	intent := agents.NormalizeDeliveryIntent(agents.DeliveryIntent{
 		Profile:            req.IntentProfile,
@@ -1738,6 +1755,10 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if !canonicalPackageHasInput(transmissionPkg) {
+		http.Error(w, "capture at least one note before submission", http.StatusConflict)
 		return
 	}
 	if requiresDecision {
@@ -2514,6 +2535,99 @@ func (s *Server) handleCancelSubmitAttempt(w http.ResponseWriter, r *http.Reques
 	}
 	writeJSON(w, map[string]any{
 		"attempt":            attempt,
+		"submit_queue_state": s.submitQueueState(),
+		"submit_attempts":    s.submitAttemptsSnapshot(),
+	})
+}
+
+func (s *Server) handleRerunSubmitAttempt(w http.ResponseWriter, r *http.Request) {
+	allowCORS(w, r)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.requireAuth(w, r) {
+		return
+	}
+	var req rerunSubmitAttemptRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	attemptID := strings.TrimSpace(req.AttemptID)
+	if attemptID == "" {
+		http.Error(w, "attempt_id is required", http.StatusBadRequest)
+		return
+	}
+	original, found := s.submitAttemptByID(attemptID)
+	if !found {
+		http.Error(w, "attempt not found", http.StatusNotFound)
+		return
+	}
+	if strings.TrimSpace(original.SessionID) == "" {
+		http.Error(w, "attempt cannot be rerun without a saved session package", http.StatusBadRequest)
+		return
+	}
+	provider := strings.TrimSpace(original.Provider)
+	if provider == "" {
+		provider = s.resolveProvider("")
+	} else {
+		provider = canonicalProviderAlias(provider, s.agents.Names())
+	}
+	cfg := s.currentConfig()
+	if !submitProviderAllowed(provider, cfg) {
+		http.Error(w, "provider blocked by policy", http.StatusForbidden)
+		return
+	}
+	if s.agents.IsRemote(provider) && !cfg.AllowRemoteSubmission {
+		http.Error(w, "remote submission is disabled by policy", http.StatusForbidden)
+		return
+	}
+	if s.agents.IsRemote(provider) {
+		if endpoint := s.agents.Endpoint(provider); endpoint != "" && !endpointAllowedByPolicy(endpoint, cfg) {
+			http.Error(w, "submission endpoint blocked by policy", http.StatusForbidden)
+			return
+		}
+	}
+	pkg, err := s.store.LoadLatestCanonicalPackage(original.SessionID)
+	if err != nil {
+		http.Error(w, "load canonical package failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if pkg == nil {
+		http.Error(w, "approved package not found for this run", http.StatusNotFound)
+		return
+	}
+	redactedPkg := redactPackageForTransmission(*pkg)
+	rc := s.currentRuntimeCodex()
+	intent := agents.NormalizeDeliveryIntent(agents.DeliveryIntent{
+		Profile:            original.IntentProfile,
+		InstructionText:    original.InstructionText,
+		CustomInstructions: original.CustomInstructions,
+	})
+	providerPayload, err := agents.PreviewProviderPayloadWithConfig(provider, redactedPkg, rc.CodexModel, rc.ClaudeAPIModel, intent)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	authCtx := s.requestAuthContext(r)
+	attempt := s.enqueueSubmitJob(provider, redactedPkg, providerPayload, intent, s.requestSource(r), authCtx.Actor)
+	w.WriteHeader(http.StatusAccepted)
+	writeJSON(w, map[string]any{
+		"attempt":            attempt,
+		"attempt_id":         attempt.AttemptID,
+		"provider":           attempt.Provider,
+		"intent_profile":     attempt.IntentProfile,
+		"intent_label":       attempt.IntentLabel,
+		"session_id":         attempt.SessionID,
+		"status":             attempt.Status,
+		"execution_mode":     attempt.Mode,
+		"queue_position":     attempt.QueuePos,
+		"source":             attempt.Source,
 		"submit_queue_state": s.submitQueueState(),
 		"submit_attempts":    s.submitAttemptsSnapshot(),
 	})
@@ -3680,5 +3794,51 @@ func sameHost(a, b string) bool {
 	if errA != nil || errB != nil {
 		return false
 	}
-	return strings.EqualFold(ua.Host, ub.Host)
+	hostA := canonicalScopeHost(ua)
+	hostB := canonicalScopeHost(ub)
+	if hostA == "" || hostB == "" {
+		return false
+	}
+	return strings.EqualFold(hostA, hostB)
+}
+
+func canonicalScopeHost(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	host := strings.TrimSpace(u.Hostname())
+	if host == "" {
+		return ""
+	}
+	if isLoopbackHost(host) {
+		return "loopback"
+	}
+	port := strings.TrimSpace(u.Port())
+	if port == "" {
+		port = defaultPortForScheme(u.Scheme)
+	}
+	if port == "" {
+		return strings.ToLower(host)
+	}
+	return strings.ToLower(net.JoinHostPort(host, port))
+}
+
+func isLoopbackHost(host string) bool {
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "localhost", "127.0.0.1", "::1", "[::1]":
+		return true
+	default:
+		return false
+	}
+}
+
+func defaultPortForScheme(scheme string) string {
+	switch strings.ToLower(strings.TrimSpace(scheme)) {
+	case "http":
+		return "80"
+	case "https":
+		return "443"
+	default:
+		return ""
+	}
 }

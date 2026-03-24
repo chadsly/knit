@@ -1,5 +1,6 @@
 const sessionStateEl = document.getElementById("sessionState");
 const themeToggleBtnEl = document.getElementById("themeToggleBtn");
+const headerHelperEl = document.getElementById("headerHelper");
 const textNoteWrapEl = document.getElementById("textNoteWrap");
 const noteTextEl = document.getElementById("noteText");
 const toggleTextBtnEl = document.getElementById("toggleTextBtn");
@@ -10,9 +11,11 @@ const previewBtnEl = document.getElementById("previewBtn");
 const submitBtnEl = document.getElementById("submitBtn");
 const stopBtnEl = document.getElementById("stopBtn");
 const captureStateEl = document.getElementById("captureState");
+const videoGuidanceEl = document.getElementById("videoGuidance");
 const activityStateEl = document.getElementById("activityState");
 const activityStateTextEl = document.getElementById("activityStateText");
 const submitNoticeEl = document.getElementById("submitNotice");
+const queueIndicatorEl = document.getElementById("queueIndicator");
 const statusEl = document.getElementById("status");
 const previewEl = document.getElementById("preview");
 const previewVideoEl = document.getElementById("previewVideo");
@@ -30,9 +33,10 @@ const ICONS = {
 
 const PENDING_SNAPSHOT_KEY = "pendingSnapshotState";
 const THEME_STORAGE_KEY = "sidePanelTheme";
+const ACTIVE_SESSION_REFRESH_MS = 3000;
+const IDLE_SESSION_REFRESH_MS = 5000;
 const PREVIEW_EMPTY_HTML = `<div class="preview-empty">Preview updates here automatically as you capture notes, snapshots, audio, and video.</div>`;
 const PREVIEW_LOADING_HTML = `<div class="preview-loading"><span class="preview-spinner" aria-hidden="true"></span><span>Loading preview…</span></div>`;
-const PREVIEW_SUBMITTED_HTML = `<div class="preview-empty">Request submitted.</div>`;
 
 let config = {
   daemonBaseURL: "http://127.0.0.1:7777",
@@ -61,8 +65,13 @@ let videoNoteFinalizing = false;
 let latestPreviewPayload = null;
 let pendingSnapshotPreviewURL = "";
 let requestActivityMessage = "";
-let previewSubmittedMessage = "";
 let currentTheme = "light";
+let previewDeliveryOptions = { omitVideoEventIDs: [] };
+let watchedSubmitAttemptID = "";
+let latestSubmitOutcomeNoticeID = "";
+let submitAttemptWatchTimer = 0;
+let sessionRefreshTimer = 0;
+let videoGuidanceTimer = 0;
 
 async function callBackground(message) {
   return chrome.runtime.sendMessage(message);
@@ -128,14 +137,112 @@ async function dataURLToBlob(dataURL) {
 }
 
 function setStatus(message, isError = false) {
-  statusEl.textContent = String(message || "").trim();
-  statusEl.classList.toggle("error", !!isError);
+  const text = String(message || "").trim();
+  statusEl.textContent = text;
+  statusEl.classList.toggle("hidden", !text);
+  statusEl.classList.toggle("error", !!text && !!isError);
 }
 
-function setSubmitNotice(message) {
+function setSubmitNotice(message, isError = false) {
   const text = String(message || "").trim();
   submitNoticeEl.textContent = text;
   submitNoticeEl.classList.toggle("hidden", !text);
+  submitNoticeEl.classList.toggle("error", !!text && !!isError);
+}
+
+function buildMainUIAttemptURL(attemptID) {
+  const base = config.daemonBaseURL.replace(/\/+$/, "") + "/";
+  const url = new URL(base);
+  const id = String(attemptID || "").trim();
+  if (id) url.searchParams.set("attempt_id", id);
+  return url.toString();
+}
+
+async function openMainUIForAttempt(attemptID) {
+  const url = buildMainUIAttemptURL(attemptID);
+  if (chrome?.tabs?.create) {
+    await chrome.tabs.create({ url });
+    return;
+  }
+  window.open(url, "_blank", "noopener");
+}
+
+function isTerminalSubmitStatus(status) {
+  const value = String(status || "").trim();
+  return value === "submitted" || value === "failed" || value === "canceled";
+}
+
+function submitAttemptOutcomeNoticeMessage(attempt) {
+  const title = String(attempt?.outcome_title || "").trim();
+  const message = String(attempt?.outcome_message || "").trim();
+  if (title && message) return `${title}: ${message}`;
+  return message || title;
+}
+
+function ensureSubmitAttemptWatchTimer() {
+  if (submitAttemptWatchTimer || !watchedSubmitAttemptID) return;
+  submitAttemptWatchTimer = window.setInterval(() => {
+    if (!watchedSubmitAttemptID) {
+      window.clearInterval(submitAttemptWatchTimer);
+      submitAttemptWatchTimer = 0;
+      return;
+    }
+    refreshSession(true).catch(() => {});
+  }, 3000);
+}
+
+function stopSubmitAttemptWatchTimer() {
+  if (!submitAttemptWatchTimer) return;
+  window.clearInterval(submitAttemptWatchTimer);
+  submitAttemptWatchTimer = 0;
+}
+
+function hasActiveSubmitAttempt(data) {
+  const attempts = Array.isArray(data?.submit_attempts) ? data.submit_attempts : [];
+  return attempts.some((attempt) => {
+    const status = String(attempt?.status || "").trim();
+    return status === "queued" || status === "in_progress" || status === "retry_wait" || status === "deferred_offline";
+  });
+}
+
+function stopSessionRefreshTimer() {
+  if (!sessionRefreshTimer) return;
+  window.clearTimeout(sessionRefreshTimer);
+  sessionRefreshTimer = 0;
+}
+
+function scheduleSessionRefresh(data, delayOverride = 0) {
+  stopSessionRefreshTimer();
+  if (!config.daemonToken) return;
+  const delay = delayOverride > 0
+    ? delayOverride
+    : (hasActiveSubmitAttempt(data) ? ACTIVE_SESSION_REFRESH_MS : IDLE_SESSION_REFRESH_MS);
+  sessionRefreshTimer = window.setTimeout(() => {
+    sessionRefreshTimer = 0;
+    refreshSession(true).catch(() => {});
+  }, delay);
+}
+
+function maybeShowSubmitAttemptOutcomeNotice(data) {
+  const attempts = Array.isArray(data?.submit_attempts) ? data.submit_attempts : [];
+  const watched = watchedSubmitAttemptID
+    ? attempts.find((attempt) => String(attempt?.attempt_id || "").trim() === watchedSubmitAttemptID) || null
+    : null;
+  const latestTerminal = watched || attempts.find((attempt) => isTerminalSubmitStatus(attempt?.status)) || null;
+  if (!latestTerminal) return;
+  const attemptID = String(latestTerminal?.attempt_id || "").trim();
+  if (!attemptID || latestSubmitOutcomeNoticeID === attemptID) return;
+  if (watchedSubmitAttemptID && attemptID !== watchedSubmitAttemptID) return;
+  if (!isTerminalSubmitStatus(latestTerminal?.status)) return;
+  const outcome = submitAttemptOutcomeNoticeMessage(latestTerminal);
+  if (outcome) {
+    setSubmitNotice(outcome, true);
+    latestSubmitOutcomeNoticeID = attemptID;
+  }
+  if (watchedSubmitAttemptID === attemptID) {
+    watchedSubmitAttemptID = "";
+    stopSubmitAttemptWatchTimer();
+  }
 }
 
 function renderActivityState() {
@@ -143,6 +250,61 @@ function renderActivityState() {
   if (!activityStateEl || !activityStateTextEl) return;
   activityStateTextEl.textContent = text || "Working…";
   activityStateEl.classList.toggle("hidden", !text);
+}
+
+function renderQueueIndicator() {
+  if (!queueIndicatorEl) return;
+  const attempts = Array.isArray(currentSessionPayload?.submit_attempts) ? currentSessionPayload.submit_attempts : [];
+  const queue = currentSessionPayload?.submit_queue || {};
+  const running = Number(queue?.running || 0);
+  const queued = Number(queue?.queued || 0);
+  const visible = attempts
+    .filter((attempt) => {
+      const status = String(attempt?.status || "").trim();
+      return status === "queued" || status === "in_progress" || status === "retry_wait" || status === "deferred_offline" || status === "submitted";
+    })
+    .slice(0, 5);
+  if (running <= 0 && queued <= 0 && !visible.length) {
+    queueIndicatorEl.textContent = "";
+    queueIndicatorEl.classList.add("hidden");
+    return;
+  }
+  const summary = `${running} running, ${queued} queued`;
+  const rows = visible.length
+    ? `<table class="queue-table"><tbody>${visible.map((attempt) => {
+        const attemptID = String(attempt?.attempt_id || "").trim();
+        const status = queueAttemptStatusLabel(attempt);
+        const label = queueAttemptTitle(attempt);
+        return `<tr><td><button type="button" class="queue-link" data-attempt-link="${escapeHTML(attemptID)}" title="Open ${escapeHTML(label)} in the main UI">${escapeHTML(label)}</button></td><td>${escapeHTML(status)}</td></tr>`;
+      }).join("")}</tbody></table>`
+    : "";
+  queueIndicatorEl.innerHTML = `<div>Queue: ${escapeHTML(summary)}</div>${rows}`;
+  queueIndicatorEl.classList.remove("hidden");
+}
+
+function queueAttemptStatusLabel(attempt) {
+  const status = String(attempt?.status || "").trim();
+  switch (status) {
+    case "submitted":
+      return "completed";
+    case "in_progress":
+      return "running";
+    case "retry_wait":
+      return "retrying";
+    case "deferred_offline":
+      return "waiting";
+    default:
+      return status || "recent";
+  }
+}
+
+function queueAttemptTitle(attempt) {
+  const preview = String(attempt?.request_preview || "").trim();
+  if (!preview) return "Recent request";
+  const compact = preview.replace(/\s+/g, " ").trim();
+  if (!compact) return "Recent request";
+  const words = compact.split(" ").slice(0, 4).join(" ");
+  return words.length < compact.length ? `${words}…` : words;
 }
 
 async function consumeSubmitNotice() {
@@ -156,6 +318,19 @@ function escapeHTML(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function formatMediaSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size >= 10 || unitIndex === 0 ? Math.round(size) : size.toFixed(1)} ${units[unitIndex]}`;
 }
 
 function authHeaders(isMutation) {
@@ -301,15 +476,54 @@ function hydratePreviewMediaLoadState() {
   });
 }
 
+function previewNoteNeedsVideoDecision(note) {
+  const status = String(note?.video_transmission_status || "").trim();
+  const size = Number(note?.video_size_bytes || 0);
+  const limit = Number(note?.video_send_limit_bytes || 0);
+  return !!note?.has_video && (status === "omitted_due_to_limit" || (limit > 0 && size > limit));
+}
+
+function previewVideoEventOmitted(eventID) {
+  const id = String(eventID || "").trim();
+  return !!id && Array.isArray(previewDeliveryOptions.omitVideoEventIDs) && previewDeliveryOptions.omitVideoEventIDs.includes(id);
+}
+
+function setPreviewVideoEventOmitted(eventID, omitted) {
+  const id = String(eventID || "").trim();
+  const current = Array.isArray(previewDeliveryOptions.omitVideoEventIDs) ? previewDeliveryOptions.omitVideoEventIDs.slice() : [];
+  const next = current.filter((item) => item !== id);
+  if (omitted && id) {
+    next.push(id);
+  }
+  previewDeliveryOptions.omitVideoEventIDs = next;
+}
+
+function resetPreviewDeliveryOptions() {
+  previewDeliveryOptions = { omitVideoEventIDs: [] };
+}
+
+function syncPreviewDeliveryOptions(preview) {
+  const validIDs = new Set((Array.isArray(preview?.notes) ? preview.notes : []).map((note) => String(note?.event_id || "").trim()).filter(Boolean));
+  previewDeliveryOptions.omitVideoEventIDs = (Array.isArray(previewDeliveryOptions.omitVideoEventIDs) ? previewDeliveryOptions.omitVideoEventIDs : []).filter((id) => validIDs.has(id));
+}
+
+function renderOversizedVideoWarningActions(preview) {
+  const notes = (Array.isArray(preview?.notes) ? preview.notes : []).filter((note) => previewNoteNeedsVideoDecision(note));
+  if (!notes.length) return "";
+  const items = notes.map((note) => {
+    const eventID = String(note?.event_id || "").trim();
+    const useSnapshotLabel = previewVideoEventOmitted(eventID)
+      ? "Send clip again"
+      : (note?.has_screenshot ? "Use snapshot instead" : "Omit clip for this request");
+    const transmissionNote = String(note?.video_transmission_note || "This clip is too large to send with the current inline media setting.").trim();
+    return `<section class="preview-note"><div class="preview-note-header"><div class="preview-note-title">${escapeHTML(eventID || "Queued request")}</div></div><div class="preview-note-text">${escapeHTML(transmissionNote)}</div><div class="preview-note-meta">${escapeHTML(formatMediaSize(note?.video_size_bytes || 0))} over ${escapeHTML(formatMediaSize(note?.video_send_limit_bytes || 0))}</div><div class="mini-toolbar"><button type="button" data-preview-action="toggle-video-omit" data-event-id="${escapeHTML(eventID)}">${escapeHTML(useSnapshotLabel)}</button><button type="button" class="danger" data-preview-action="delete" data-event-id="${escapeHTML(eventID)}">Delete request</button></div></section>`;
+  }).join("");
+  return `<div class="preview-warning-card"><strong>Large clip needs a decision</strong><div class="preview-note-text">Choose how to handle the affected request before you submit.</div>${items}</div>`;
+}
+
 function renderPreviewSurface() {
   const preview = latestPreviewPayload || null;
   const notes = Array.isArray(preview?.notes) ? preview.notes : [];
-  if (!preview && !hasPendingSnapshot() && previewSubmittedMessage) {
-    previewEl.innerHTML = previewSubmittedMessage === "Request submitted."
-      ? PREVIEW_SUBMITTED_HTML
-      : `<div class="preview-empty">${escapeHTML(previewSubmittedMessage)}</div>`;
-    return;
-  }
   if (!preview && !hasPendingSnapshot()) {
     previewEl.innerHTML = PREVIEW_EMPTY_HTML;
     return;
@@ -318,7 +532,9 @@ function renderPreviewSurface() {
     previewEl.innerHTML = `<div class="preview-summary"><strong>Queued snapshot ready</strong></div>${previewMediaHTML(queuedSnapshotPreviewURL(), "Queued snapshot", "Queued snapshot for the next note")}`;
     return;
   }
+  syncPreviewDeliveryOptions(preview);
   const summary = escapeHTML(preview?.summary || "Ready to send");
+  const oversizedVideoBlock = renderOversizedVideoWarningActions(preview);
   const noteCards = notes.length ? notes.map((note, index) => {
     const eventID = String(note?.event_id || "").trim();
     const dom = note?.dom_summary ? `<div class="preview-note-meta">Target: ${escapeHTML(note.dom_summary)}</div>` : "";
@@ -334,15 +550,18 @@ function renderPreviewSurface() {
     const video = note?.video_data_url
       ? previewVideoHTML(note.video_data_url, "Clip")
       : "";
+    const transmissionNote = previewNoteNeedsVideoDecision(note)
+      ? `<div class="preview-note-meta">${escapeHTML(String(note?.video_transmission_note || "This clip is too large to send inline.").trim())}</div>`
+      : "";
     const deleteAction = eventID
       ? `<button type="button" class="preview-note-action" data-preview-action="delete" data-event-id="${escapeHTML(eventID)}" title="Remove queued request" aria-label="Remove queued request">${ICONS.trash}</button>`
       : "";
-    return `<section class="preview-note"><div class="preview-note-header"><div class="preview-note-title">Request ${index + 1}</div>${deleteAction}</div><div class="preview-note-text">${escapeHTML(note?.text || "")}</div>${dom}${mediaLine}${screenshot}${video}</section>`;
+    return `<section class="preview-note"><div class="preview-note-header"><div class="preview-note-title">Request ${index + 1}</div>${deleteAction}</div><div class="preview-note-text">${escapeHTML(note?.text || "")}</div>${dom}${mediaLine}${transmissionNote}${screenshot}${video}</section>`;
   }).join("") : `<div class="preview-empty">No notes captured yet. Add a note or snapshot first.</div>`;
   const queuedSnapshotFallback = !notes.some((note) => !!note?.screenshot_data_url) && hasPendingSnapshot()
     ? previewMediaHTML(queuedSnapshotPreviewURL(), "Queued snapshot", "Queued snapshot for the next note")
     : "";
-  previewEl.innerHTML = `<div class="preview-summary"><strong>${summary}</strong></div>${queuedSnapshotFallback}${noteCards}`;
+  previewEl.innerHTML = `<div class="preview-summary"><strong>${summary}</strong></div>${oversizedVideoBlock}${queuedSnapshotFallback}${noteCards}`;
   hydratePreviewMediaLoadState();
 }
 
@@ -357,6 +576,62 @@ function renderCaptureState() {
   captureStateEl.textContent = "";
   captureStateEl.classList.remove("ready");
   captureStateEl.classList.add("hidden");
+}
+
+function formatElapsedClock(ms) {
+  const totalSeconds = Math.max(0, Math.round(Number(ms || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function stopVideoGuidanceTimer() {
+  if (!videoGuidanceTimer) return;
+  window.clearInterval(videoGuidanceTimer);
+  videoGuidanceTimer = 0;
+}
+
+function ensureVideoGuidanceTimer() {
+  if (videoGuidanceTimer || recordingKind !== "video") return;
+  videoGuidanceTimer = window.setInterval(() => {
+    renderVideoGuidance();
+  }, 1000);
+}
+
+function renderVideoGuidance() {
+  if (!videoGuidanceEl) return;
+  if (recordingKind !== "video" && !videoNoteFinalizing) {
+    videoGuidanceEl.textContent = "";
+    videoGuidanceEl.classList.add("hidden");
+    videoGuidanceEl.classList.remove("active");
+    stopVideoGuidanceTimer();
+    return;
+  }
+  let text = "";
+  let active = false;
+  if (recordingKind === "video") {
+    text = `Recording video note: ${formatElapsedClock(Date.now() - videoNoteStartedAt)}. Aim for 5-20 seconds so the clip is more likely to fit send limits.`;
+    active = true;
+    ensureVideoGuidanceTimer();
+  } else if (videoNoteFinalizing) {
+    text = "Finalizing video note…";
+    active = true;
+    stopVideoGuidanceTimer();
+  } else {
+    stopVideoGuidanceTimer();
+  }
+  videoGuidanceEl.textContent = text;
+  videoGuidanceEl.classList.toggle("hidden", !text);
+  videoGuidanceEl.classList.toggle("active", active);
+}
+
+function renderHeaderHelper() {
+  if (!headerHelperEl) return;
+  const paired = !!config.daemonToken;
+  headerHelperEl.textContent = paired
+    ? ""
+    : "Pair this browser from the popup first to connect it to the main Knit UI.";
+  headerHelperEl.classList.toggle("hidden", paired);
 }
 
 function renderSessionState() {
@@ -411,7 +686,7 @@ function renderComposerControls() {
       ? "Start a review session from the main UI first."
       : recordingKind === "video"
       ? "Stop recording the current tab."
-      : (hasPendingSnapshot() ? "Record the current tab with voice. The queued snapshot will be attached." : "Record the current tab with voice."),
+      : (hasPendingSnapshot() ? "Record the current tab with voice. The queued snapshot will be attached. Aim for 5-20 seconds." : "Record the current tab with voice. Aim for 5-20 seconds."),
     { disabled: !hasSession || busy || recordingKind === "audio", active: recordingKind === "video" }
   );
   setIconButton(
@@ -439,6 +714,8 @@ function renderComposerControls() {
         : "Submit the current package to the daemon queue."
   );
   renderCaptureState();
+  renderVideoGuidance();
+  renderHeaderHelper();
   renderSessionState();
   renderTextEditorState();
 }
@@ -446,6 +723,7 @@ function renderComposerControls() {
 function renderSession(data) {
   currentSessionPayload = data || null;
   renderComposerControls();
+  renderQueueIndicator();
 }
 
 function clearPendingSnapshot() {
@@ -491,8 +769,10 @@ async function restorePendingSnapshotState() {
 
 async function refreshSession(preserveStatus = false) {
   if (!config.daemonToken) {
+    stopSessionRefreshTimer();
     currentSessionPayload = null;
     latestPreviewPayload = null;
+    resetPreviewDeliveryOptions();
     clearPendingSnapshot();
     renderComposerControls();
     if (!preserveStatus) {
@@ -504,16 +784,22 @@ async function refreshSession(preserveStatus = false) {
   try {
     const data = await request("/api/extension/session", { headers: authHeaders(false) });
     renderSession(data);
+    maybeShowSubmitAttemptOutcomeNotice(data);
+    scheduleSessionRefresh(data);
     if (!data?.session?.id) {
+      resetPreviewDeliveryOptions();
       clearPendingSnapshot();
     }
     if (!preserveStatus) {
-      setStatus(data?.session?.id ? "Ready." : "No active review session. Start one from the main Knit UI first.");
+      setStatus(data?.session?.id ? "" : "No active review session. Start one from the main Knit UI first.");
     }
   } catch (err) {
+    scheduleSessionRefresh(null, IDLE_SESSION_REFRESH_MS);
     currentSessionPayload = null;
+    resetPreviewDeliveryOptions();
     clearPendingSnapshot();
     renderComposerControls();
+    renderQueueIndicator();
     if (!preserveStatus) {
       setStatus("Daemon connection failed: " + err.message, true);
     }
@@ -711,7 +997,8 @@ function toggleTextEditor() {
   }
 }
 
-async function submitTypedNote() {
+async function submitTypedNote(options = {}) {
+  const skipAutoPreview = !!options.skipAutoPreview;
   const note = typedNoteValue();
   if (!note) {
     textEditorOpen = true;
@@ -743,7 +1030,11 @@ async function submitTypedNote() {
     textEditorOpen = false;
     renderTextEditorState();
     await refreshSession(true);
-    await refreshPreviewAuto({ preserveStatus: true });
+    if (!skipAutoPreview) {
+      await refreshPreviewAuto({ preserveStatus: true });
+    } else {
+      renderPreviewSurface();
+    }
     setStatus((usedQueuedSnapshot ? "Typed note captured with snapshot: " : "Typed note captured: ") + String(result?.event_id || "ready for preview") + ".");
   } finally {
     setRequestInFlight(false);
@@ -1039,21 +1330,43 @@ async function approveSession(silent = false, reason = "preview") {
   }
 }
 
+async function ensureFeedbackPresent() {
+  const feedback = Array.isArray(currentSessionPayload?.session?.feedback) ? currentSessionPayload.session.feedback : [];
+  if (feedback.length > 0) {
+    return;
+  }
+  await refreshSession(true);
+  const nextFeedback = Array.isArray(currentSessionPayload?.session?.feedback) ? currentSessionPayload.session.feedback : [];
+  if (nextFeedback.length > 0) {
+    return;
+  }
+  throw new Error("Capture at least one note first.");
+}
+
 async function preview(silent = false) {
-  previewSubmittedMessage = "";
   setPreviewLoading("Loading preview…");
   try {
     if (!silent) {
       setRequestInFlight(true);
       setRequestActivity("Refreshing preview…");
     }
+    if (textEditorOpen && typedNoteValue()) {
+      await submitTypedNote({ skipAutoPreview: true });
+    }
+    await ensureFeedbackPresent();
     await approveSession(true, "preview");
-    const data = await postJSON("/api/session/payload/preview", { provider: "" });
+    const data = await postJSON("/api/session/payload/preview", {
+      provider: "",
+      omit_video_event_ids: previewDeliveryOptions.omitVideoEventIDs || []
+    });
     latestPreviewPayload = data?.preview || {};
     renderPreviewSurface();
     if (!silent) {
       setStatus("Preview refreshed.");
     }
+  } catch (err) {
+    renderPreviewSurface();
+    throw err;
   } finally {
     if (!silent) {
       setRequestInFlight(false);
@@ -1071,6 +1384,7 @@ async function deletePreviewNote(eventID) {
   setPreviewLoading("Removing request…");
   try {
     await postJSON("/api/session/feedback/delete", { event_id: trimmedEventID });
+    setPreviewVideoEventOmitted(trimmedEventID, false);
     await refreshSession(true);
     await preview(true);
     setStatus("Queued request removed.");
@@ -1079,14 +1393,29 @@ async function deletePreviewNote(eventID) {
   }
 }
 
+async function togglePreviewVideoEventOmission(eventID) {
+  const id = String(eventID || "").trim();
+  if (!id) return;
+  setPreviewVideoEventOmitted(id, !previewVideoEventOmitted(id));
+  await preview(true);
+  setStatus(previewVideoEventOmitted(id) ? "Large clip will be omitted for this request." : "Large clip will be sent again for this request.");
+}
+
 async function submit() {
   setRequestInFlight(true);
   setRequestActivity("Submitting request…");
   try {
+    if (textEditorOpen && typedNoteValue()) {
+      await submitTypedNote({ skipAutoPreview: true });
+    }
+    await ensureFeedbackPresent();
     await approveSession(true, "submit");
-    const data = await postJSON("/api/session/submit", { provider: "" });
+    const data = await postJSON("/api/session/submit", {
+      provider: "",
+      omit_video_event_ids: previewDeliveryOptions.omitVideoEventIDs || []
+    });
     latestPreviewPayload = null;
-    previewSubmittedMessage = "Request submitted.";
+    resetPreviewDeliveryOptions();
     noteTextEl.value = "";
     textEditorOpen = false;
     renderTextEditorState();
@@ -1095,8 +1424,10 @@ async function submit() {
     await refreshSession(true);
     const provider = String(data?.provider || "default adapter").trim() || "default adapter";
     const attemptID = String(data?.attempt_id || "").trim();
+    watchedSubmitAttemptID = attemptID;
+    if (attemptID) ensureSubmitAttemptWatchTimer();
     const message = `Request queued via ${provider}${attemptID ? ` (${attemptID})` : ""}.`;
-    setStatus("Request submitted.");
+    setStatus("");
     setSubmitNotice(message);
     await callBackground({
       type: "knit:notify-submit",
@@ -1106,6 +1437,14 @@ async function submit() {
         provider
       }
     });
+  } catch (err) {
+    const message = String(err?.message || "").trim();
+    if (message.includes("over the default send limit") || message.includes("explicit decision")) {
+      await preview(true).catch(() => {});
+      setStatus("Submission blocked until you choose how to handle the large clip in preview.", true);
+      return;
+    }
+    throw err;
   } finally {
     setRequestInFlight(false);
   }
@@ -1114,6 +1453,7 @@ async function submit() {
 async function stopSession() {
   await postJSON("/api/session/stop", {});
   latestPreviewPayload = null;
+  resetPreviewDeliveryOptions();
   clearPendingSnapshot();
   noteTextEl.value = "";
   textEditorOpen = false;
@@ -1139,13 +1479,30 @@ submitBtnEl.addEventListener("click", () => submit().catch((err) => setStatus(er
 stopBtnEl.addEventListener("click", () => stopSession().catch((err) => setStatus(err.message, true)));
 themeToggleBtnEl?.addEventListener("click", () => toggleTheme().catch((err) => setStatus(err.message, true)));
 previewEl.addEventListener("click", (event) => {
-  const button = event.target instanceof Element ? event.target.closest("[data-preview-action='delete']") : null;
+  const button = event.target instanceof Element ? event.target.closest("[data-preview-action]") : null;
   if (!button) return;
+  const action = String(button.getAttribute("data-preview-action") || "").trim();
   const eventID = String(button.getAttribute("data-event-id") || "").trim();
-  deletePreviewNote(eventID).catch((err) => setStatus(err.message, true));
+  if (action === "delete") {
+    deletePreviewNote(eventID).catch((err) => setStatus(err.message, true));
+    return;
+  }
+  if (action === "toggle-video-omit") {
+    togglePreviewVideoEventOmission(eventID).catch((err) => setStatus(err.message, true));
+  }
+});
+queueIndicatorEl?.addEventListener("click", (event) => {
+  const button = event.target instanceof Element ? event.target.closest("[data-attempt-link]") : null;
+  if (!button) return;
+  const attemptID = String(button.getAttribute("data-attempt-link") || "").trim();
+  if (!attemptID) return;
+  openMainUIForAttempt(attemptID).catch((err) => setStatus(err.message, true));
 });
 
 window.addEventListener("beforeunload", () => {
+  stopSubmitAttemptWatchTimer();
+  stopSessionRefreshTimer();
+  stopVideoGuidanceTimer();
   stopStream(videoNoteMicStream);
   stopStream(videoNoteDisplayStream);
   stopStream(audioNoteStream);

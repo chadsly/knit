@@ -97,7 +97,7 @@ type ExtensionPairing struct {
 }
 
 const (
-	DefaultLocalCodingSandbox    = "workspace-write"
+	DefaultLocalCodingSandbox    = "danger-full-access"
 	DefaultLocalCodingApproval   = "never"
 	DefaultDeliveryIntentProfile = agents.IntentImplementChanges
 	DefaultCheckUpdatesOnStartup = true

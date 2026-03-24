@@ -613,6 +613,81 @@ const floatingComposerHTML = `<!doctype html>
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .submit-attempt-indicator {
+      position: absolute;
+      top: .55rem;
+      right: .65rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, .35);
+      background: rgba(255,255,255,.94);
+      color: #52607a;
+      font-size: .82rem;
+      line-height: 1;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, .08);
+    }
+    .submit-attempt-indicator.ok {
+      color: #0f766e;
+      border-color: rgba(15, 118, 110, .28);
+      background: rgba(236, 253, 245, .98);
+    }
+    .submit-attempt-indicator.warn {
+      color: #b45309;
+      border-color: rgba(180, 83, 9, .28);
+      background: rgba(255, 251, 235, .98);
+    }
+    .submit-attempt-indicator.error {
+      color: #b42318;
+      border-color: rgba(180, 35, 24, .28);
+      background: rgba(254, 242, 242, .98);
+    }
+    .status-card {
+      position: relative;
+    }
+    .submit-attempt-card-compact {
+      display: block;
+      width: 100%;
+      padding: 0;
+      overflow: hidden;
+    }
+    .submit-attempt-card-compact > summary {
+      list-style: none;
+      cursor: pointer;
+      display: block;
+      padding: .8rem 2.7rem .8rem .85rem;
+    }
+    .submit-attempt-card-compact > summary::-webkit-details-marker {
+      display: none;
+    }
+    .submit-attempt-summary-compact {
+      display: grid;
+      gap: .32rem;
+    }
+    .submit-attempt-summary-head-compact {
+      display: flex;
+      justify-content: space-between;
+      gap: .5rem;
+      align-items: flex-start;
+    }
+    .submit-attempt-request-compact {
+      color: var(--muted);
+      font-size: .8rem;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+    .submit-attempt-body-compact {
+      display: grid;
+      gap: .55rem;
+      padding: 0 .85rem .85rem;
+      border-top: 1px solid var(--line);
+    }
     pre {
       background: var(--bg);
       color: var(--text);
@@ -1052,7 +1127,8 @@ const floatingComposerHTML = `<!doctype html>
 
       <section id="fcCodexCLIDefaultsSection" class="runtime-section">
         <h4>Codex CLI Defaults</h4>
-        <div class="runtime-inline-note" id="fcCodexDefaultBehavior">Knit defaults local coding-agent runs to <code>workspace-write</code> sandbox and <code>never</code> approval so implementation requests can complete without falling back to read-only behavior.</div>
+        <div class="runtime-inline-note" id="fcCodexDefaultBehavior">Knit defaults local coding-agent runs to <code>danger-full-access</code> sandbox and <code>never</code> approval so implementation requests can make changes without extra setup.</div>
+        <div class="runtime-inline-note" id="fcCodexSandboxWarning">Knit is ready to let the coding agent make changes in this repository.</div>
         <div class="field-grid">
           <label class="field">
             <span class="field-label">Sandbox</span>
@@ -1227,6 +1303,7 @@ const fcOpenCodeCliTimeoutSecondsEl = document.getElementById('fcOpenCodeCliTime
 const fcSubmitExecutionModeEl = document.getElementById('fcSubmitExecutionMode');
 const fcCodexSandboxEl = document.getElementById('fcCodexSandbox');
 const fcCodexApprovalEl = document.getElementById('fcCodexApproval');
+const fcCodexSandboxWarningEl = document.getElementById('fcCodexSandboxWarning');
 const fcCodexSkipRepoCheckEl = document.getElementById('fcCodexSkipRepoCheck');
 const fcCodexProfileEl = document.getElementById('fcCodexProfile');
 const fcCodexModelEl = document.getElementById('fcCodexModel');
@@ -1307,6 +1384,8 @@ let fcLiveLogUnavailableForAttempt = '';
 let fcWatchedSubmitAttemptIDs = new Set();
 let fcSubmitAttemptStatusByID = new Map();
 let fcSubmitAttemptNotificationsReady = false;
+let fcOpenSubmitAttemptCardIDs = new Set();
+let fcSubmitAttemptOutputScrollTopByID = new Map();
 
 function loadFCSettings() {
   try {
@@ -1466,6 +1545,8 @@ function truncateSubmitToastTextFC(value, limit = 88) {
 }
 
 function submitAttemptToastMessageFC(attempt) {
+  const outcomeMessage = submitAttemptOutcomeToastMessageFC(attempt);
+  if (outcomeMessage) return outcomeMessage;
   const status = String(attempt?.status || '').trim();
   const request = truncateSubmitToastTextFC(String(attempt?.request_preview || ''));
   const attemptID = String(attempt?.attempt_id || '').trim();
@@ -1473,8 +1554,31 @@ function submitAttemptToastMessageFC(attempt) {
     if (request) return 'Request failed: ' + request;
     return 'Request failed' + (attemptID ? ' (' + attemptID + ')' : '.');
   }
+  if (status === 'canceled') {
+    if (request) return 'Request canceled: ' + request;
+    return 'Request canceled' + (attemptID ? ' (' + attemptID + ')' : '.');
+  }
   if (request) return 'Request completed: ' + request;
   return 'Request completed' + (attemptID ? ' (' + attemptID + ')' : '.');
+}
+
+function submitAttemptOutcomeTitleFC(attempt) {
+  return String(attempt?.outcome_title || '').trim();
+}
+
+function submitAttemptOutcomeMessageFC(attempt) {
+  return String(attempt?.outcome_message || '').trim();
+}
+
+function submitAttemptNeedsAttentionFC(attempt) {
+  return String(attempt?.outcome_code || '').trim().length > 0;
+}
+
+function submitAttemptOutcomeToastMessageFC(attempt) {
+  const title = submitAttemptOutcomeTitleFC(attempt);
+  const message = truncateSubmitToastTextFC(submitAttemptOutcomeMessageFC(attempt));
+  if (title && message) return title + ': ' + message;
+  return message || title;
 }
 
 function notifySubmitAttemptTransitionsFC(attempts) {
@@ -1498,7 +1602,7 @@ function notifySubmitAttemptTransitionsFC(attempts) {
     const watched = fcWatchedSubmitAttemptIDs.has(attemptID);
     const transitioned = prevStatus !== status;
     if (isTerminalSubmitStatusFC(status) && transitioned && (watched || prevStatus)) {
-      showToastFC(submitAttemptToastMessageFC(attempt), status === 'failed');
+      showToastFC(submitAttemptToastMessageFC(attempt), status === 'failed' || submitAttemptNeedsAttentionFC(attempt));
       fcWatchedSubmitAttemptIDs.delete(attemptID);
     }
     nextStatuses.set(attemptID, status);
@@ -2149,8 +2253,21 @@ function syncFCCodexRuntimeModeUI() {
       fcRuntimeProviderHelpEl.textContent = 'OpenCode CLI only needs its command and timeout here. Codex-only sandbox, approval, model, and reasoning settings stay hidden.';
       break;
     default:
-      fcRuntimeProviderHelpEl.textContent = 'Codex CLI uses Knit defaults of workspace-write sandbox and never approval unless you explicitly choose different values here.';
+      fcRuntimeProviderHelpEl.textContent = 'Codex CLI uses Knit defaults of danger-full-access sandbox and never approval unless you explicitly choose different values here.';
       break;
+    }
+  }
+  if (fcCodexSandboxWarningEl) {
+    const sandbox = String(fcCodexSandboxEl?.value || '').trim() || 'read-only';
+    if (provider !== 'codex_cli') {
+      fcCodexSandboxWarningEl.textContent = 'Sandbox controls only apply to Codex CLI runs.';
+      fcCodexSandboxWarningEl.style.color = '#6a7383';
+    } else if (sandbox !== 'danger-full-access') {
+      fcCodexSandboxWarningEl.textContent = 'Allow the coding agent to make changes by switching Sandbox to danger-full-access. Lower sandbox modes can leave the run read-only or block required edits.';
+      fcCodexSandboxWarningEl.style.color = '#c34f4f';
+    } else {
+      fcCodexSandboxWarningEl.textContent = 'Knit is ready to let the coding agent make changes in this repository.';
+      fcCodexSandboxWarningEl.style.color = '#1f8f63';
     }
   }
   syncComposerSettingsSummaryFC();
@@ -3002,12 +3119,30 @@ function splitLiveAgentOutputForDisplayFC(raw) {
 function renderLiveAgentOutputFC() {
   if (!fcLiveSubmitLogEl) return;
   const split = splitLiveAgentOutputForDisplayFC(fcLiveLogRawText);
+  const logShouldStick = shouldStickScrollFC(fcLiveSubmitLogEl);
+  const logScrollTop = fcLiveSubmitLogEl.scrollTop;
   fcLiveSubmitLogEl.textContent = split.work || 'No live work log yet. Work activity appears here after the adapter starts writing logs.';
-  fcLiveSubmitLogEl.scrollTop = fcLiveSubmitLogEl.scrollHeight;
+  restoreScrollPositionFC(fcLiveSubmitLogEl, logScrollTop, logShouldStick);
   if (fcLiveSubmitCommentaryEl) {
+    const commentaryShouldStick = shouldStickScrollFC(fcLiveSubmitCommentaryEl);
+    const commentaryScrollTop = fcLiveSubmitCommentaryEl.scrollTop;
     fcLiveSubmitCommentaryEl.textContent = split.commentary || 'No agent commentary yet. Plain-language progress updates appear here when the agent explains what it is doing.';
-    fcLiveSubmitCommentaryEl.scrollTop = fcLiveSubmitCommentaryEl.scrollHeight;
+    restoreScrollPositionFC(fcLiveSubmitCommentaryEl, commentaryScrollTop, commentaryShouldStick);
   }
+}
+
+function shouldStickScrollFC(el, threshold = 24) {
+  if (!el) return true;
+  return (el.scrollTop + el.clientHeight) >= (el.scrollHeight - threshold);
+}
+
+function restoreScrollPositionFC(el, previousTop, stickToBottom) {
+  if (!el) return;
+  if (stickToBottom) {
+    el.scrollTop = el.scrollHeight;
+    return;
+  }
+  el.scrollTop = Math.max(0, Math.min(previousTop, el.scrollHeight));
 }
 
 function providerDestinationLabelFC(provider) {
@@ -3040,10 +3175,10 @@ function activeRunningSubmitAttemptFC() {
 
 function activeSubmitAttemptForLogFC() {
   const runningAttempt = activeRunningSubmitAttemptFC();
-  if (runningAttempt && looksLikeLocalAttemptLogRefFC(attemptLogRefFC(runningAttempt))) return runningAttempt;
+  if (runningAttempt) return runningAttempt;
   if (fcLiveLogAttemptId && fcLiveLogCompletedForAttempt !== fcLiveLogAttemptId) {
     const latestAttempt = findSubmitAttemptByIdFC(fcLiveLogAttemptId);
-    if (latestAttempt && looksLikeLocalAttemptLogRefFC(attemptLogRefFC(latestAttempt))) return latestAttempt;
+    if (latestAttempt) return latestAttempt;
   }
   const attempts = Array.isArray(lastState?.submit_attempts) ? lastState.submit_attempts : [];
   return attempts.find(a => {
@@ -3178,6 +3313,55 @@ function normalizeSubmitAttemptOutputPreviewFC(text, truncated, truncatedHead) {
   return preview;
 }
 
+function submitAttemptCardShouldStartOpenFC(attempt, index) {
+  if (String(attempt?.status || '').trim() === 'in_progress') return true;
+  return index === 0;
+}
+
+function submitAttemptScrollKeyFC(attemptID, section) {
+  return String(attemptID || '').trim() + ':' + String(section || '').trim();
+}
+
+function snapshotSubmitHistoryStateFC() {
+  if (!fcSubmitHistoryEl) return;
+  const nextCardIDs = new Set();
+  const nextOutputScrollTopByID = new Map();
+  fcSubmitHistoryEl.querySelectorAll('[data-submit-attempt-id]').forEach((card) => {
+    const attemptID = String(card.getAttribute('data-submit-attempt-id') || '').trim();
+    if (!attemptID) return;
+    if (card.open) {
+      nextCardIDs.add(attemptID);
+    }
+    card.querySelectorAll('[data-submit-attempt-output]').forEach((panel) => {
+      const section = String(panel.getAttribute('data-submit-attempt-output') || '').trim();
+      if (section && panel.scrollTop > 0) {
+        nextOutputScrollTopByID.set(submitAttemptScrollKeyFC(attemptID, section), panel.scrollTop);
+      }
+    });
+  });
+  fcOpenSubmitAttemptCardIDs = nextCardIDs;
+  fcSubmitAttemptOutputScrollTopByID = nextOutputScrollTopByID;
+}
+
+function restoreSubmitHistoryStateFC() {
+  if (!fcSubmitHistoryEl) return;
+  fcSubmitHistoryEl.querySelectorAll('[data-submit-attempt-id]').forEach((card, index) => {
+    const attemptID = String(card.getAttribute('data-submit-attempt-id') || '').trim();
+    if (!attemptID) return;
+    card.open = fcOpenSubmitAttemptCardIDs.size > 0
+      ? fcOpenSubmitAttemptCardIDs.has(attemptID)
+      : submitAttemptCardShouldStartOpenFC(findSubmitAttemptByIdFC(attemptID), index);
+    card.querySelectorAll('[data-submit-attempt-output]').forEach((panel) => {
+      const section = String(panel.getAttribute('data-submit-attempt-output') || '').trim();
+      if (!section) return;
+      const scrollTop = Number(fcSubmitAttemptOutputScrollTopByID.get(submitAttemptScrollKeyFC(attemptID, section)) || 0);
+      if (scrollTop > 0) {
+        panel.scrollTop = scrollTop;
+      }
+    });
+  });
+}
+
 async function hydrateSubmitAttemptOutputsFC() {
   const attempts = Array.isArray(lastState?.submit_attempts) ? lastState.submit_attempts : [];
   const visible = attempts.slice(0, 5);
@@ -3191,9 +3375,7 @@ async function hydrateSubmitAttemptOutputsFC() {
     fcSubmitAttemptOutputPreviewInflight.add(attemptID);
     fcSubmitAttemptOutputPreviewByID.set(attemptID, { status: 'loading', text: '' });
     try {
-      const status = String(attempt?.status || '').trim();
-      const useTail = status !== 'in_progress' && status !== 'queued';
-      const path = '/api/session/attempt/log?attempt_id=' + encodeURIComponent(attemptID) + '&offset=0&limit=24000' + (useTail ? '&tail=1' : '');
+      const path = '/api/session/attempt/log?attempt_id=' + encodeURIComponent(attemptID) + '&offset=0&limit=24000';
       const res = await fetch(path, { headers: authHeaders(false) });
       const txt = await res.text();
       if (!res.ok) throw new Error(txt || ('HTTP ' + res.status));
@@ -3211,39 +3393,121 @@ async function hydrateSubmitAttemptOutputsFC() {
 
 function renderSubmitAttemptOutputFC(attempt) {
   const output = submitAttemptOutputTextFC(attempt);
+  const summary = String(attempt?.agent_summary || '').trim();
   if (!output) {
-    return '<div class="small" style="color:#6a7383;">No output captured yet.</div>';
+    return summary
+      ? '<div class="flow-stack" style="margin-top:.35rem;"><div class="small" style="color:#6a7383;"><strong>Agent summary:</strong></div><pre data-submit-attempt-output="summary" style="max-height:120px;overflow:auto;white-space:pre-wrap;">' + escapePreviewHTML(summary) + '</pre></div>'
+      : '<div class="small" style="color:#6a7383;">No output captured yet.</div>';
   }
   if (!submitAttemptOutputHasPreviewFC(attempt)) {
-    return '<div class="small">' + escapePreviewHTML(output) + '</div>';
+    return (summary ? '<div class="small" style="margin-bottom:.3rem;"><strong>Agent summary:</strong> ' + escapePreviewHTML(summary) + '</div>' : '') +
+      '<div class="small">' + escapePreviewHTML(output) + '</div>';
   }
-  return '<pre style="margin-top:.35rem;max-height:120px;overflow:auto;white-space:pre-wrap;">' + escapePreviewHTML(output) + '</pre>';
+  return (summary ? '<div class="small" style="margin-bottom:.3rem;"><strong>Agent summary:</strong> ' + escapePreviewHTML(summary) + '</div>' : '') +
+    '<pre data-submit-attempt-output="output" style="margin-top:.35rem;max-height:120px;overflow:auto;white-space:pre-wrap;">' + escapePreviewHTML(output) + '</pre>';
+}
+
+function renderSubmitAttemptOutcomeFC(attempt) {
+  const title = submitAttemptOutcomeTitleFC(attempt);
+  const message = submitAttemptOutcomeMessageFC(attempt);
+  if (!title && !message) return '';
+  return '<div class="small" style="margin-top:.3rem;color:#b45309;"><strong>Result:</strong> ' + escapePreviewHTML(title + (message ? ': ' + message : '')) + '</div>';
+}
+
+function submitAttemptIndicatorStateFC(attempt) {
+  const status = String(attempt?.status || '').trim();
+  if (status === 'failed') return { symbol: '✕', tone: 'error', label: 'Failed run' };
+  if (status === 'canceled') return { symbol: '−', tone: 'warn', label: 'Canceled run' };
+  if (status === 'submitted') {
+    if (submitAttemptNeedsAttentionFC(attempt)) return { symbol: '!', tone: 'warn', label: 'Completed with issues' };
+    return { symbol: '✓', tone: 'ok', label: 'Successful run' };
+  }
+  if (status === 'in_progress') return { symbol: '…', tone: '', label: 'Run in progress' };
+  if (status === 'queued' || status === 'retry_wait' || status === 'deferred_offline') return { symbol: '•', tone: '', label: 'Run pending' };
+  return { symbol: '?', tone: '', label: 'Run status unknown' };
+}
+
+function renderSubmitAttemptIndicatorFC(attempt) {
+  const indicator = submitAttemptIndicatorStateFC(attempt);
+  return '<span class="submit-attempt-indicator' + (indicator.tone ? ' ' + indicator.tone : '') + '" title="' +
+    escapePreviewHTML(indicator.label) + '" aria-label="' + escapePreviewHTML(indicator.label) + '">' +
+    escapePreviewHTML(indicator.symbol) +
+  '</span>';
+}
+
+function renderRerunSubmitAttemptButtonFC(attempt) {
+  const attemptID = String(attempt?.attempt_id || '').trim();
+  if (!attemptID) return '';
+  return '<button type="button" class="secondary" onclick="rerunSubmitAttemptFC(\'' + escapePreviewHTML(attemptID) + '\')" title="Rerun request with current settings" aria-label="Rerun request with current settings" style="padding:.22rem .45rem;min-width:2rem;">↻</button>';
 }
 
 function renderSubmitHistoryFC() {
   if (!fcSubmitHistoryEl) return;
   const attempts = Array.isArray(lastState?.submit_attempts) ? lastState.submit_attempts : [];
   if (!attempts.length) {
+    fcOpenSubmitAttemptCardIDs = new Set();
+    fcSubmitAttemptOutputScrollTopByID = new Map();
     fcSubmitHistoryEl.textContent = 'No runs yet.';
     return;
   }
-  fcSubmitHistoryEl.innerHTML = attempts.slice(0, 5).map(attempt => {
+  snapshotSubmitHistoryStateFC();
+  fcSubmitHistoryEl.innerHTML = attempts.slice(0, 5).map((attempt, index) => {
     const status = String(attempt?.status || 'unknown');
     const request = escapePreviewHTML(String(attempt?.request_preview || 'No request preview captured.'));
     const attemptID = escapePreviewHTML(String(attempt?.attempt_id || 'attempt'));
     const destination = escapePreviewHTML(providerDestinationLabelFC(attempt?.provider || 'agent'));
-    return '<div class="status-card" style="margin-top:.45rem;">' +
-      '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:.6rem;">' +
-        '<strong>' + destination + '</strong>' +
-        '<span class="small">' + escapePreviewHTML(status) + '</span>' +
+    return '<details class="status-card submit-attempt-card-compact" data-submit-attempt-id="' + attemptID + '" style="margin-top:.45rem;"' +
+      (submitAttemptCardShouldStartOpenFC(attempt, index) ? ' open' : '') + '>' +
+      renderSubmitAttemptIndicatorFC(attempt) +
+      '<summary>' +
+        '<div class="submit-attempt-summary-compact">' +
+          '<div class="submit-attempt-summary-head-compact">' +
+            '<strong>' + destination + '</strong>' +
+            '<span class="small">' + escapePreviewHTML(status) + '</span>' +
+          '</div>' +
+          '<div class="submit-attempt-request-compact">' + request + '</div>' +
+        '</div>' +
+      '</summary>' +
+      '<div class="submit-attempt-body-compact">' +
+        '<div class="row" style="justify-content:space-between;align-items:center;gap:.45rem;">' +
+          '<div class="small" style="color:#6a7383;">' + attemptID + '</div>' +
+          renderRerunSubmitAttemptButtonFC(attempt) +
+        '</div>' +
+        renderSubmitAttemptOutcomeFC(attempt) +
+        (submitAttemptWorkspaceTextFC(attempt) ? '<div class="small"><strong>Workspace used:</strong> ' + escapePreviewHTML(submitAttemptWorkspaceTextFC(attempt)) + '</div>' : '') +
+        '<div class="small"><strong>Output:</strong></div>' +
+        renderSubmitAttemptOutputFC(attempt) +
       '</div>' +
-      '<div class="small" style="margin-top:.3rem;"><strong>Request:</strong> ' + request + '</div>' +
-      (submitAttemptWorkspaceTextFC(attempt) ? '<div class="small" style="margin-top:.3rem;"><strong>Workspace used:</strong> ' + escapePreviewHTML(submitAttemptWorkspaceTextFC(attempt)) + '</div>' : '') +
-      '<div class="small" style="margin-top:.3rem;"><strong>Output:</strong></div>' +
-      renderSubmitAttemptOutputFC(attempt) +
-      '<div class="small" style="margin-top:.3rem;color:#6a7383;">' + attemptID + '</div>' +
-    '</div>';
+    '</details>';
   }).join('');
+  restoreSubmitHistoryStateFC();
+}
+
+async function rerunSubmitAttemptFC(attemptID) {
+  const id = String(attemptID || '').trim();
+  const attempts = Array.isArray(lastState?.submit_attempts) ? lastState.submit_attempts : [];
+  const attempt = attempts.find(item => String(item?.attempt_id || '').trim() === id) || null;
+  if (!id || !attempt) return;
+  const destination = providerDestinationLabelFC(attempt?.provider || 'agent');
+  if (!window.confirm('Rerun this request to ' + destination + ' with the current workspace and agent settings?')) return;
+  try {
+    const data = await postJSON('/api/session/attempt/rerun', { attempt_id: id });
+    const rerunAttempt = data.attempt || null;
+    const rerunAttemptID = String(rerunAttempt?.attempt_id || data.attempt_id || '').trim();
+    lastState = lastState || {};
+    lastState.submit_queue = data.submit_queue_state || lastState.submit_queue;
+    lastState.submit_attempts = Array.isArray(data.submit_attempts) ? data.submit_attempts : lastState.submit_attempts;
+    if (rerunAttemptID) fcWatchedSubmitAttemptIDs.add(rerunAttemptID);
+    notifySubmitAttemptTransitionsFC(lastState.submit_attempts);
+    renderSubmitHistoryFC();
+    void hydrateSubmitAttemptOutputsFC();
+    const intentLabel = String(rerunAttempt?.intent_label || attempt?.intent_label || 'Default request').trim();
+    setStatus('Submission re-queued: ' + (rerunAttemptID || 'attempt') + '.');
+    showToastFC('Request re-queued to ' + destination + ' for "' + intentLabel + '"' + (rerunAttemptID ? (' as ' + rerunAttemptID) : '.'));
+  } catch (err) {
+    setStatus('Rerun failed: ' + err.message, true);
+    showToastFC('Could not rerun request: ' + err.message, true);
+  }
 }
 
 function notifySubmitRecoveryNoticesFC(notices) {

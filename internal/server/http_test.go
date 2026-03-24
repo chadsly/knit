@@ -106,6 +106,91 @@ func TestStateIncludesEnterpriseControls(t *testing.T) {
 	}
 }
 
+func TestStateIncludesCommonSubmitFailureOutcomesForMainUI(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	srv.submitMu.Lock()
+	srv.submitAttempts = []submitAttempt{
+		{
+			AttemptID:      "attempt-no-input",
+			Status:         "submitted",
+			OutcomeCode:    submitOutcomeNoInput,
+			OutcomeTitle:   "No input",
+			OutcomeMessage: "Knit submitted this run without any captured change requests or artifacts, so the coding agent had nothing to change.",
+		},
+		{
+			AttemptID:      "attempt-trusted-directory",
+			Status:         "failed",
+			OutcomeCode:    submitOutcomeTrustedDir,
+			OutcomeTitle:   "Trusted directory required",
+			OutcomeMessage: "Go back to Capture, Review, and Send, open Settings, then check Workspace first. If the wrong repository is selected, choose the correct workspace for this project and rerun. If the workspace is already correct, open Settings > Agent and switch Sandbox to danger-full-access before rerunning. Workspace used: /tmp/ruddur.",
+		},
+		{
+			AttemptID:      "attempt-wrong-workspace",
+			Status:         "submitted",
+			OutcomeCode:    submitOutcomeWrongWorkspace,
+			OutcomeTitle:   "Wrong workspace",
+			OutcomeMessage: "Go back to Capture, Review, and Send, open Settings > Workspace, and choose the repository that matches this request before rerunning. Workspace used: /tmp/ruddur.",
+		},
+		{
+			AttemptID:      "attempt-read-only",
+			Status:         "submitted",
+			OutcomeCode:    submitOutcomeReadOnly,
+			OutcomeTitle:   "Read-only",
+			OutcomeMessage: "Go back to Capture, Review, and Send, open Settings > Agent, and switch Sandbox to danger-full-access before rerunning.",
+		},
+	}
+	srv.submitMu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	addAuth(req, cfg.ControlToken, false, "")
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode state payload: %v", err)
+	}
+	attempts, _ := payload["submit_attempts"].([]any)
+	if len(attempts) != 4 {
+		t.Fatalf("expected 4 submit attempts, got %#v", payload["submit_attempts"])
+	}
+
+	want := map[string]struct {
+		code     string
+		title    string
+		contains string
+	}{
+		"attempt-no-input":          {code: submitOutcomeNoInput, title: "No input", contains: "had nothing to change"},
+		"attempt-trusted-directory": {code: submitOutcomeTrustedDir, title: "Trusted directory required", contains: "open Settings, then check Workspace first"},
+		"attempt-wrong-workspace":   {code: submitOutcomeWrongWorkspace, title: "Wrong workspace", contains: "open Settings > Workspace"},
+		"attempt-read-only":         {code: submitOutcomeReadOnly, title: "Read-only", contains: "open Settings > Agent"},
+	}
+	for _, raw := range attempts {
+		attempt, _ := raw.(map[string]any)
+		id, _ := attempt["attempt_id"].(string)
+		exp, ok := want[id]
+		if !ok {
+			t.Fatalf("unexpected attempt in state payload: %#v", attempt)
+		}
+		if got := attempt["outcome_code"]; got != exp.code {
+			t.Fatalf("expected outcome_code %q for %s, got %#v", exp.code, id, got)
+		}
+		if got := attempt["outcome_title"]; got != exp.title {
+			t.Fatalf("expected outcome_title %q for %s, got %#v", exp.title, id, got)
+		}
+		message, _ := attempt["outcome_message"].(string)
+		if !strings.Contains(message, exp.contains) {
+			t.Fatalf("expected outcome_message for %s to contain %q, got %q", id, exp.contains, message)
+		}
+	}
+}
+
 func TestUpdateCheckEndpointReturnsLatestRelease(t *testing.T) {
 	cfg := config.Default()
 	cfg.ControlToken = "test-token"
@@ -423,7 +508,7 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, `id="captureOptionExtension"`) || !strings.Contains(body, `>Easy<`) || !strings.Contains(body, `Chrome Extension`) {
 		t.Fatalf("expected step 2 to render the easy Chrome Extension path")
 	}
-	if !strings.Contains(body, `onclick="openDocsBrowser('GETTING_STARTED.md')"`) || !strings.Contains(body, `>Install guide</span>`) {
+	if !strings.Contains(body, `onclick="openDocsBrowser('getting_started.md')"`) || !strings.Contains(body, `>Install guide</span>`) {
 		t.Fatalf("expected Chrome Extension option card to link directly to the extension install guide")
 	}
 	if !strings.Contains(body, `id="captureOptionComposer"`) || !strings.Contains(body, `>Intermediate<`) || !strings.Contains(body, `Popout Composer`) || !strings.Contains(body, `Open popout composer`) {
@@ -483,9 +568,6 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if strings.Contains(body, "const sessionInProgress = hasSession && captureState !== 'inactive';") {
 		t.Fatalf("did not expect index to gate session transport visibility on capture state")
 	}
-	if !strings.Contains(body, "id=\"platformRuntimeState\"") || !strings.Contains(body, "function renderPlatformRuntimeStatus()") {
-		t.Fatalf("expected index to render platform runtime guidance")
-	}
 	if !strings.Contains(body, "function renderExtensionPairings()") || !strings.Contains(body, "escapePreviewHTML(label)") || strings.Contains(body, "escapeHTML(label)") {
 		t.Fatalf("expected extension pairing rendering to use the shared preview escaping helper")
 	}
@@ -513,6 +595,9 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, "<strong>Current run</strong>") || !strings.Contains(body, "<summary>Recent runs</summary>") {
 		t.Fatalf("expected delivery section to use clearer current-run and history labels")
 	}
+	if !strings.Contains(body, ".submit-attempt-indicator") || !strings.Contains(body, "function submitAttemptIndicatorState(attempt)") || !strings.Contains(body, "function renderSubmitAttemptIndicator(attempt)") {
+		t.Fatalf("expected recent-run cards to expose a top-right success or failure indicator")
+	}
 	if !strings.Contains(body, "No live work log yet. Work activity appears here after the adapter starts writing logs.") || !strings.Contains(body, "No agent commentary yet. Plain-language progress updates appear here when the agent explains what it is doing.") {
 		t.Fatalf("expected delivery section to split live output into work and commentary lanes")
 	}
@@ -528,14 +613,20 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, "function requestPreviewText(attempt)") || !strings.Contains(body, "<strong>Request:</strong>") || !strings.Contains(body, "request_preview") {
 		t.Fatalf("expected delivery section summaries to expose request preview snippets for queued and running attempts")
 	}
-	if !strings.Contains(body, "function submitAttemptOutputText(attempt)") || !strings.Contains(body, "function hydrateSubmitAttemptOutputs()") || !strings.Contains(body, "function renderSubmitAttemptOutput(attempt)") || !strings.Contains(body, "splitLiveAgentOutputForDisplay(output)") || !strings.Contains(body, "function providerDestinationLabel(provider)") || !strings.Contains(body, "function notifySubmitRecoveryNotices(notices)") || !strings.Contains(body, "No work log captured for this run.") || !strings.Contains(body, "No agent commentary captured for this run.") || !strings.Contains(body, "<summary>Raw JSON</summary>") {
-		t.Fatalf("expected recent-run history to split stored output into work-log and agent-commentary panes with optional raw JSON")
+	if !strings.Contains(body, "function submitAttemptOutputText(attempt)") || !strings.Contains(body, "function hydrateSubmitAttemptOutputs()") || !strings.Contains(body, "function renderSubmitAttemptOutput(attempt)") || !strings.Contains(body, "splitLiveAgentOutputForDisplay(output)") || !strings.Contains(body, "Agent summary") || !strings.Contains(body, "function providerDestinationLabel(provider)") || !strings.Contains(body, "function notifySubmitRecoveryNotices(notices)") || !strings.Contains(body, "No work log captured for this run.") || !strings.Contains(body, "No agent commentary captured for this run.") || !strings.Contains(body, "<summary>Raw JSON</summary>") {
+		t.Fatalf("expected recent-run history to expose an agent summary alongside work-log and agent-commentary panes with optional raw JSON")
+	}
+	if !strings.Contains(body, "function submitAttemptNeedsAttention(attempt)") || !strings.Contains(body, "function submitAttemptOutcomeListItem(attempt)") || !strings.Contains(body, "<strong>Result:</strong>") {
+		t.Fatalf("expected main UI recent-run history to expose explicit no-op and blocked-run outcomes")
+	}
+	if strings.Contains(body, "const useTail = status !== 'in_progress' && status !== 'queued';") || strings.Contains(body, "&tail=1") {
+		t.Fatalf("did not expect recent-run previews to tail adapter logs; they should start at the beginning so startup/system output remains visible")
 	}
 	if !strings.Contains(body, "function submitAttemptWorkspaceListItem(attempt)") || !strings.Contains(body, "<strong>Workspace used:</strong>") {
 		t.Fatalf("expected delivery section to expose the actual workspace used for each submit attempt")
 	}
-	if !strings.Contains(body, "function cancelSubmitAttempt(attemptID)") || !strings.Contains(body, "/api/session/attempt/cancel") || !strings.Contains(body, "Remove from queue") || !strings.Contains(body, "Stop request") {
-		t.Fatalf("expected main UI to expose stop controls for queued and running submit attempts")
+	if !strings.Contains(body, "function cancelSubmitAttempt(attemptID)") || !strings.Contains(body, "function rerunSubmitAttempt(attemptID)") || !strings.Contains(body, "/api/session/attempt/cancel") || !strings.Contains(body, "/api/session/attempt/rerun") || !strings.Contains(body, "Remove from queue") || !strings.Contains(body, "Stop request") || !strings.Contains(body, "Rerun request with current settings") {
+		t.Fatalf("expected main UI to expose rerun and stop controls for queued and running submit attempts")
 	}
 	if !strings.Contains(body, "const txt = await res.text();") || !strings.Contains(body, "if (!res.ok) throw new Error(txt || ('HTTP ' + res.status));") || !strings.Contains(body, "function handleStateRefreshFailure(message)") || !strings.Contains(body, "Main UI stopped refreshing: ") {
 		t.Fatalf("expected main UI state refresh failures to surface visibly instead of silently freezing the page")
@@ -600,8 +691,11 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, "id=\"themeToggleBtn\"") || !strings.Contains(body, "toggleTheme()") {
 		t.Fatalf("expected index to include a light/dark theme toggle")
 	}
-	if !strings.Contains(body, "class=\"hero-topline\"") {
-		t.Fatalf("expected theme toggle to be rendered inside the hero layout")
+	if !strings.Contains(body, "class=\"hero-header\"") {
+		t.Fatalf("expected theme toggle to be rendered in the hero header")
+	}
+	if strings.Index(body, "id=\"themeToggleBtn\"") > strings.Index(body, "Capture what should change. Tell your agent.") {
+		t.Fatalf("expected theme toggle to render above the hero headline")
 	}
 	if strings.Contains(body, ".theme-toggle {\n      position: fixed;") {
 		t.Fatalf("did not expect theme toggle to remain fixed outside the hero grid")
@@ -660,7 +754,7 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, "looksLikeLocalAttemptLogRef(") || !strings.Contains(body, "live log unavailable for this adapter.") || !strings.Contains(body, "id=\"liveSubmitCommentary\"") || !strings.Contains(body, "function splitLiveAgentOutputForDisplay(raw)") || !strings.Contains(body, "function renderLiveAgentOutput()") {
 		t.Fatalf("expected live adapter log polling to split work logs from agent commentary and skip non-local adapter refs")
 	}
-	if !strings.Contains(body, "function activeSubmitAttemptForLog()") || !strings.Contains(body, "const latestLoggedAttempt = attempts.find(a => {") {
+	if !strings.Contains(body, "function activeSubmitAttemptForLog()") || !strings.Contains(body, "if (runningAttempt) return runningAttempt;") || !strings.Contains(body, "const latestLoggedAttempt = attempts.find(a => {") {
 		t.Fatalf("expected live adapter log polling to continue through completion for the active attempt")
 	}
 	if !strings.Contains(body, "popup=yes") {
@@ -669,8 +763,11 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, "More capture options") || !strings.Contains(body, "Start voice commands") {
 		t.Fatalf("expected index to include voice command controls")
 	}
-	if !strings.Contains(body, "Capture Guide (Step By Step)") {
+	if !strings.Contains(body, "Capture Guide") || !strings.Contains(body, "Choose the repository in <strong>Workspace</strong>") || !strings.Contains(body, "Text-only notes are valid.") {
 		t.Fatalf("expected index to include capture guide instructions")
+	}
+	if strings.Contains(body, "id=\"captureGuideStatus\"") || strings.Contains(body, "id=\"platformRuntimeState\"") || strings.Contains(body, "id=\"composerSupportState\"") || strings.Contains(body, "Session started: ") || strings.Contains(body, "Platform runtime: ") || strings.Contains(body, "Composer popup uses window.open") {
+		t.Fatalf("did not expect the capture guide sidebar to include runtime/status diagnostic blocks")
 	}
 	if !strings.Contains(body, "id=\"captureGuideSidebar\"") {
 		t.Fatalf("expected index to include right-side capture guide sidebar")
@@ -678,11 +775,14 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, "class=\"capture-guide-header\"") || !strings.Contains(body, "class=\"danger icon-btn capture-guide-close\"") {
 		t.Fatalf("expected capture guide close control to be rendered in the sidebar header corner")
 	}
-	if !strings.Contains(body, "id=\"guideInfoBtn\" class=\"capture-guide-toggle hidden\"") || !strings.Contains(body, ">ℹ️<") {
-		t.Fatalf("expected index to include info-icon control to reopen capture guide")
+	if !strings.Contains(body, "id=\"guideInfoBtn\" class=\"capture-guide-toggle hidden\"") || !strings.Contains(body, "data-guide-icon=\"capture\"") {
+		t.Fatalf("expected index to include modern capture-guide icon control to reopen the sidebar")
 	}
 	if strings.Contains(body, "id=\"guideInfoBtn\" class=\"icon-btn") {
 		t.Fatalf("did not expect guide info icon to render with button chrome class")
+	}
+	if !strings.Contains(body, "class=\"capture-guide-title\"") || !strings.Contains(body, "class=\"capture-guide-title-mark\"") {
+		t.Fatalf("expected capture guide header to render the updated icon treatment")
 	}
 	if !strings.Contains(body, "id=\"appToast\"") || !strings.Contains(body, "showToast('Connect browser link copied')") {
 		t.Fatalf("expected index to include toast feedback for connect-browser copy")
@@ -690,7 +790,7 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, `showToast('Request submitted to ' + destination + ' for "`) {
 		t.Fatalf("expected index to show a toast when submission succeeds")
 	}
-	if !strings.Contains(body, "function notifySubmitAttemptTransitions(attempts)") || !strings.Contains(body, "showToast(submitAttemptToastMessage(attempt), status === 'failed')") {
+	if !strings.Contains(body, "function notifySubmitAttemptTransitions(attempts)") || !strings.Contains(body, "showToast(submitAttemptToastMessage(attempt), status === 'failed' || submitAttemptNeedsAttention(attempt))") {
 		t.Fatalf("expected index to show one-shot completion toasts for submit attempt state transitions")
 	}
 	if !strings.Contains(body, "closeCaptureGuideSidebar()") || !strings.Contains(body, "openCaptureGuideSidebar()") {
@@ -808,7 +908,7 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, `<option value="claude_api">claude_api</option>`) || !strings.Contains(body, `id="claudeAPIBaseURL"`) || !strings.Contains(body, `id="claudeAPIModel"`) {
 		t.Fatalf("expected index runtime modal to expose claude_api controls")
 	}
-	if strings.Contains(body, "Use Codex CLI default (no override)") || !strings.Contains(body, "workspace-write</code> sandbox and <code>never</code> approval") {
+	if strings.Contains(body, "Use Codex CLI default (no override)") || !strings.Contains(body, "danger-full-access</code> sandbox and <code>never</code> approval") || !strings.Contains(body, "Allow the coding agent to make changes by switching Sandbox to danger-full-access") {
 		t.Fatalf("expected index runtime modal to show Knit-owned sandbox and approval defaults")
 	}
 	if !strings.Contains(body, "scheduleCodexRuntimeApply") || !strings.Contains(body, "syncCodexRuntimeModeUI") {
@@ -930,6 +1030,147 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	}
 }
 
+func TestIndexRecentRunsExposeStatusIndicatorHelpers(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, ".submit-attempt-indicator") ||
+		!strings.Contains(body, "function submitAttemptIndicatorState(attempt)") ||
+		!strings.Contains(body, "function renderSubmitAttemptIndicator(attempt)") ||
+		!strings.Contains(body, "function submitAttemptCardShouldStartOpen(attempt, index)") ||
+		!strings.Contains(body, "data-submit-attempt-output=\"work\"") ||
+		!strings.Contains(body, "function shouldStickScroll(el, threshold = 24)") ||
+		!strings.Contains(body, "class=\"status-card submit-attempt-card\"") {
+		t.Fatalf("expected index recent runs to expose collapsible cards, scroll helpers, and status indicators")
+	}
+}
+
+func TestIndexRecentRunsUseStructuredHeaderLayout(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, ".submit-attempt-header {") ||
+		!strings.Contains(body, ".submit-attempt-meta-top {") ||
+		!strings.Contains(body, ".submit-attempt-action-row {") {
+		t.Fatalf("expected main UI recent runs to include dedicated header layout styles")
+	}
+	if !strings.Contains(body, "submit-attempt-header") ||
+		!strings.Contains(body, "submit-attempt-main") ||
+		!strings.Contains(body, "submit-attempt-meta") ||
+		!strings.Contains(body, "submit-attempt-status-line") ||
+		!strings.Contains(body, "submit-attempt-time") {
+		t.Fatalf("expected main UI recent runs to render title, status, time, indicator, and actions in structured header slots")
+	}
+}
+
+func TestIndexRefreshKeepsRuntimeStateInScopeForLiveOutputPolling(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	refreshStart := strings.Index(body, "async function refresh() {")
+	if refreshStart == -1 {
+		t.Fatalf("expected main UI refresh function to be rendered")
+	}
+	refreshBody := body[refreshStart:]
+	tryStart := strings.Index(refreshBody, "  try {")
+	if tryStart == -1 {
+		t.Fatalf("expected refresh function to contain a try block")
+	}
+	preTry := refreshBody[:tryStart]
+	if !strings.Contains(preTry, "let rc = currentState?.runtime_codex || {};") ||
+		!strings.Contains(preTry, "let preservingRuntimeDraft = codexRuntimeDirty || codexRuntimeApplying;") {
+		t.Fatalf("expected refresh to hoist runtime state before the try block so live polling survives fetch failures")
+	}
+	if !strings.Contains(refreshBody, "rc = currentState.runtime_codex || {};") {
+		t.Fatalf("expected refresh to update the runtime snapshot after state loads")
+	}
+	if strings.Contains(refreshBody, "const rc = currentState.runtime_codex || {};") ||
+		strings.Contains(refreshBody, "const preservingRuntimeDraft = codexRuntimeDirty || codexRuntimeApplying;") {
+		t.Fatalf("did not expect refresh to redeclare runtime state inside the try block")
+	}
+	if !strings.Contains(refreshBody, "refreshActiveSubmitLog();") {
+		t.Fatalf("expected refresh to continue into live submit-log polling")
+	}
+}
+
+func TestIndexThemeToggleRendersInHeroHeader(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `class="hero-header"`) {
+		t.Fatalf("expected theme toggle to render in the hero header")
+	}
+	if !strings.Contains(body, `id="themeToggleBtn"`) {
+		t.Fatalf("expected theme toggle button in index HTML")
+	}
+	if strings.Index(body, `id="themeToggleBtn"`) > strings.Index(body, "Capture what should change. Tell your agent.") {
+		t.Fatalf("expected theme toggle to render above the hero headline")
+	}
+	if !strings.Contains(body, ".hero-header .theme-toggle") {
+		t.Fatalf("expected mobile styles to preserve the theme toggle width in the hero header")
+	}
+}
+
+func TestIndexIncludesModernCaptureGuideIcon(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, `id="guideInfoBtn" class="capture-guide-toggle hidden"`) {
+		t.Fatalf("expected capture guide reopen control")
+	}
+	if !strings.Contains(body, `data-guide-icon="capture"`) {
+		t.Fatalf("expected capture guide reopen control to render the modern svg icon")
+	}
+	if !strings.Contains(body, `class="capture-guide-title"`) || !strings.Contains(body, `class="capture-guide-title-mark"`) {
+		t.Fatalf("expected capture guide sidebar header to render the updated icon treatment")
+	}
+}
+
 func TestFaviconRouteServesIcon(t *testing.T) {
 	cfg := config.Default()
 	cfg.ControlToken = "test-token"
@@ -1005,6 +1246,54 @@ func TestProviderAllowlistBlocksPreviewAndSubmit(t *testing.T) {
 	srv.httpSrv.Handler.ServeHTTP(submitRec, submitReq)
 	if submitRec.Code != http.StatusForbidden {
 		t.Fatalf("expected submit provider block, got %d: %s", submitRec.Code, submitRec.Body.String())
+	}
+}
+
+func TestPreviewAndSubmitRejectApprovedPackageWithoutInput(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	startReq := httptest.NewRequest(http.MethodPost, "/api/session/start", bytes.NewReader([]byte(`{"target_window":"Browser Preview","target_url":"https://example.com"}`)))
+	startReq.Header.Set("Content-Type", "application/json")
+	addAuth(startReq, cfg.ControlToken, true, "nonce-empty-start")
+	startRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(startRec, startReq)
+	if startRec.Code != http.StatusOK {
+		t.Fatalf("start failed: %d %s", startRec.Code, startRec.Body.String())
+	}
+
+	approveReq := httptest.NewRequest(http.MethodPost, "/api/session/approve", bytes.NewReader([]byte(`{"summary":""}`)))
+	approveReq.Header.Set("Content-Type", "application/json")
+	addAuth(approveReq, cfg.ControlToken, true, "nonce-empty-approve")
+	approveRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(approveRec, approveReq)
+	if approveRec.Code != http.StatusOK {
+		t.Fatalf("approve failed: %d %s", approveRec.Code, approveRec.Body.String())
+	}
+
+	previewReq := httptest.NewRequest(http.MethodPost, "/api/session/payload/preview", bytes.NewReader([]byte(`{"provider":"cli"}`)))
+	previewReq.Header.Set("Content-Type", "application/json")
+	addAuth(previewReq, cfg.ControlToken, true, "nonce-empty-preview")
+	previewRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(previewRec, previewReq)
+	if previewRec.Code != http.StatusConflict {
+		t.Fatalf("expected empty preview to be rejected, got %d: %s", previewRec.Code, previewRec.Body.String())
+	}
+	if !strings.Contains(previewRec.Body.String(), "capture at least one note") {
+		t.Fatalf("expected empty preview error message, got %q", previewRec.Body.String())
+	}
+
+	submitReq := httptest.NewRequest(http.MethodPost, "/api/session/submit", bytes.NewReader([]byte(`{"provider":"cli"}`)))
+	submitReq.Header.Set("Content-Type", "application/json")
+	addAuth(submitReq, cfg.ControlToken, true, "nonce-empty-submit")
+	submitRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(submitRec, submitReq)
+	if submitRec.Code != http.StatusConflict {
+		t.Fatalf("expected empty submit to be rejected, got %d: %s", submitRec.Code, submitRec.Body.String())
+	}
+	if !strings.Contains(submitRec.Body.String(), "capture at least one note") {
+		t.Fatalf("expected empty submit error message, got %q", submitRec.Body.String())
 	}
 }
 
@@ -1133,8 +1422,17 @@ func TestFloatingComposerEndpointRequiresAuthAndRenders(t *testing.T) {
 	if !strings.Contains(body, "togglePreviewReplayRedactionFC()") || !strings.Contains(body, "togglePreviewVideoDeliveryFC()") || !strings.Contains(body, "redact_replay_values") || !strings.Contains(body, "omit_video_clips") {
 		t.Fatalf("expected floating composer preview/send flow to expose one-click delivery actions")
 	}
-	if !strings.Contains(body, "id=\"fcLiveSubmitLog\"") || !strings.Contains(body, "id=\"fcLiveSubmitCommentary\"") || !strings.Contains(body, "refreshActiveSubmitLogFC()") || !strings.Contains(body, "hasOpenableSubmitLogFC()") || !strings.Contains(body, "function splitLiveAgentOutputForDisplayFC(raw)") || !strings.Contains(body, "function renderLiveAgentOutputFC()") || !strings.Contains(body, "id=\"fcSubmitHistory\"") || !strings.Contains(body, "function hydrateSubmitAttemptOutputsFC()") || !strings.Contains(body, "function renderSubmitHistoryFC()") || !strings.Contains(body, "function providerDestinationLabelFC(provider)") || !strings.Contains(body, "function notifySubmitRecoveryNoticesFC(notices)") {
-		t.Fatalf("expected floating composer to include split live output polling, compact recent runs, and recovery notices")
+	if !strings.Contains(body, "id=\"fcLiveSubmitLog\"") || !strings.Contains(body, "id=\"fcLiveSubmitCommentary\"") || !strings.Contains(body, "refreshActiveSubmitLogFC()") || !strings.Contains(body, "hasOpenableSubmitLogFC()") || !strings.Contains(body, "function splitLiveAgentOutputForDisplayFC(raw)") || !strings.Contains(body, "function renderLiveAgentOutputFC()") || !strings.Contains(body, "function shouldStickScrollFC(el, threshold = 24)") || !strings.Contains(body, "Agent summary:") || !strings.Contains(body, "id=\"fcSubmitHistory\"") || !strings.Contains(body, "function hydrateSubmitAttemptOutputsFC()") || !strings.Contains(body, "function renderSubmitHistoryFC()") || !strings.Contains(body, "function snapshotSubmitHistoryStateFC()") || !strings.Contains(body, "class=\"status-card submit-attempt-card-compact\"") || !strings.Contains(body, "function rerunSubmitAttemptFC(attemptID)") || !strings.Contains(body, "/api/session/attempt/rerun") || !strings.Contains(body, "function providerDestinationLabelFC(provider)") || !strings.Contains(body, "function notifySubmitRecoveryNoticesFC(notices)") {
+		t.Fatalf("expected floating composer to include split live output polling, agent summaries, compact recent runs, rerun controls, and recovery notices")
+	}
+	if !strings.Contains(body, ".submit-attempt-indicator") || !strings.Contains(body, "function submitAttemptIndicatorStateFC(attempt)") || !strings.Contains(body, "function renderSubmitAttemptIndicatorFC(attempt)") {
+		t.Fatalf("expected floating recent-run cards to expose a top-right success or failure indicator")
+	}
+	if !strings.Contains(body, "function activeSubmitAttemptForLogFC()") || !strings.Contains(body, "if (runningAttempt) return runningAttempt;") {
+		t.Fatalf("expected floating composer live log polling to stick to the active running attempt before the execution log path arrives")
+	}
+	if strings.Contains(body, "const useTail = status !== 'in_progress' && status !== 'queued';") || strings.Contains(body, "&tail=1") {
+		t.Fatalf("did not expect floating recent-run previews to tail adapter logs; they should start at the beginning so startup/system output remains visible")
 	}
 	if !strings.Contains(body, "overflow-wrap: anywhere;") || !strings.Contains(body, "word-break: break-word;") {
 		t.Fatalf("expected floating composer preformatted panels to wrap long unbroken log lines instead of stretching the layout")
@@ -1185,7 +1483,7 @@ func TestFloatingComposerEndpointRequiresAuthAndRenders(t *testing.T) {
 	if !strings.Contains(body, `<option value="claude_api">claude_api</option>`) || !strings.Contains(body, `id="fcClaudeAPIBaseURL"`) || !strings.Contains(body, `id="fcClaudeAPIModel"`) {
 		t.Fatalf("expected floating composer runtime modal to expose claude_api controls")
 	}
-	if strings.Contains(body, "Use Codex CLI default (no override)") || !strings.Contains(body, "workspace-write</code> sandbox and <code>never</code> approval") {
+	if strings.Contains(body, "Use Codex CLI default (no override)") || !strings.Contains(body, "danger-full-access</code> sandbox and <code>never</code> approval") || !strings.Contains(body, "Allow the coding agent to make changes by switching Sandbox to danger-full-access") {
 		t.Fatalf("expected floating composer runtime modal to show Knit-owned sandbox and approval defaults")
 	}
 	if !strings.Contains(body, "scheduleCodexRuntimeApplyFC") || !strings.Contains(body, "syncFCCodexRuntimeModeUI") {
@@ -1203,8 +1501,11 @@ func TestFloatingComposerEndpointRequiresAuthAndRenders(t *testing.T) {
 	if !strings.Contains(body, `showToastFC('Request submitted to ' + destination + ' for "`) {
 		t.Fatalf("expected floating composer to show a toast when submission succeeds")
 	}
-	if !strings.Contains(body, "function notifySubmitAttemptTransitionsFC(attempts)") || !strings.Contains(body, "showToastFC(submitAttemptToastMessageFC(attempt), status === 'failed')") {
+	if !strings.Contains(body, "function notifySubmitAttemptTransitionsFC(attempts)") || !strings.Contains(body, "showToastFC(submitAttemptToastMessageFC(attempt), status === 'failed' || submitAttemptNeedsAttentionFC(attempt))") {
 		t.Fatalf("expected floating composer to show one-shot completion toasts for submit attempt state transitions")
+	}
+	if !strings.Contains(body, "function submitAttemptNeedsAttentionFC(attempt)") || !strings.Contains(body, "renderSubmitAttemptOutcomeFC(attempt)") || !strings.Contains(body, "<strong>Result:</strong>") {
+		t.Fatalf("expected floating composer history to expose explicit no-op and blocked-run outcomes")
 	}
 	if !strings.Contains(body, "setFCSetting('theme'") || !strings.Contains(body, "applyThemeFC(normalizeThemeFC(fcSettings.theme || 'light'))") {
 		t.Fatalf("expected floating composer theme preference to persist in localStorage")
@@ -1370,6 +1671,56 @@ func TestFloatingComposerEndpointRequiresAuthAndRenders(t *testing.T) {
 	}
 	if !strings.Contains(body, "Make clip smaller to send") || !strings.Contains(body, "/api/session/feedback/clip?event_id=") {
 		t.Fatalf("expected floating composer preview UI to support resizing oversized clips")
+	}
+}
+
+func TestFloatingComposerRecentRunsExposeStatusIndicatorHelpers(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/floating-composer", nil)
+	addAuth(req, cfg.ControlToken, false, "")
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	if !strings.Contains(body, ".submit-attempt-indicator") ||
+		!strings.Contains(body, "function submitAttemptIndicatorStateFC(attempt)") ||
+		!strings.Contains(body, "function renderSubmitAttemptIndicatorFC(attempt)") ||
+		!strings.Contains(body, "function submitAttemptCardShouldStartOpenFC(attempt, index)") ||
+		!strings.Contains(body, "data-submit-attempt-output=\"output\"") ||
+		!strings.Contains(body, "function shouldStickScrollFC(el, threshold = 24)") {
+		t.Fatalf("expected floating composer recent runs to expose compact cards, scroll helpers, and status indicators")
+	}
+}
+
+func TestMainUIIncludesSubmitAttemptDeepLinkFocusHooks(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/?attempt_id=attempt-123", nil)
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	required := []string{
+		`function requestedSubmitAttemptIDFromLocation()`,
+		`searchParams.get('attempt_id')`,
+		`function focusSubmitAttemptFromLocation()`,
+		`focused-attempt`,
+		`window.addEventListener('popstate', focusSubmitAttemptFromLocation);`,
+	}
+	for _, fragment := range required {
+		if !strings.Contains(body, fragment) {
+			t.Fatalf("expected main UI to include deep-link focus hook %q", fragment)
+		}
 	}
 }
 
@@ -2886,6 +3237,46 @@ func TestCompanionPointerRejectsEventsOutsideApprovedTargetScope(t *testing.T) {
 	latest, _ := state["pointer_latest"].(map[string]any)
 	if latest["url"] != "https://example.com/app" {
 		t.Fatalf("expected rejected pointer event to leave latest scoped sample intact, got %#v", latest["url"])
+	}
+}
+
+func TestCompanionPointerAcceptsLoopbackAliasesForSameTargetScope(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	startReq := httptest.NewRequest(http.MethodPost, "/api/session/start", bytes.NewReader([]byte(`{"target_window":"Browser Preview","target_url":"http://localhost:3000/app"}`)))
+	startReq.Header.Set("Content-Type", "application/json")
+	addAuth(startReq, cfg.ControlToken, true, "nonce-start-pointer-loopback")
+	startRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(startRec, startReq)
+	if startRec.Code != http.StatusOK {
+		t.Fatalf("start failed: %d %s", startRec.Code, startRec.Body.String())
+	}
+	var sess map[string]any
+	if err := json.Unmarshal(startRec.Body.Bytes(), &sess); err != nil {
+		t.Fatalf("decode start response: %v", err)
+	}
+	sessionID, _ := sess["id"].(string)
+	if sessionID == "" {
+		t.Fatalf("missing session id")
+	}
+
+	pointerReq := httptest.NewRequest(http.MethodPost, "/api/companion/pointer", bytes.NewReader([]byte(`{
+		"session_id":"`+sessionID+`",
+		"x":320,
+		"y":180,
+		"event_type":"extension_context",
+		"window":"Browser Preview",
+		"url":"http://127.0.0.1:3000/app",
+		"route":"/app"
+	}`)))
+	pointerReq.Header.Set("Content-Type", "application/json")
+	addAuth(pointerReq, cfg.ControlToken, true, "nonce-pointer-loopback")
+	pointerRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(pointerRec, pointerReq)
+	if pointerRec.Code != http.StatusOK {
+		t.Fatalf("expected loopback alias pointer to be accepted, got %d: %s", pointerRec.Code, pointerRec.Body.String())
 	}
 }
 
@@ -4514,6 +4905,197 @@ func TestCancelSubmitAttemptEndpointCancelsQueuedAttempt(t *testing.T) {
 	}
 }
 
+func TestRerunSubmitAttemptEndpointRequeuesWithCurrentWorkspace(t *testing.T) {
+	t.Setenv("KNIT_CLI_ADAPTER_CMD", `echo '{"run_id":"rerun-submit","status":"accepted","ref":"/tmp/rerun-submit.log"}'`)
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	srv.sessions.Start("Browser Preview", "https://example.com")
+	if _, err := srv.sessions.AddFeedback(session.FeedbackEvt{
+		ID:             "evt-rerun-1",
+		RawTranscript:  "Tighten the checkout spacing",
+		NormalizedText: "Tighten the checkout spacing",
+	}); err != nil {
+		t.Fatalf("add feedback: %v", err)
+	}
+	pkg, err := srv.sessions.Approve("Tighten the checkout spacing")
+	if err != nil {
+		t.Fatalf("approve session: %v", err)
+	}
+	if err := srv.store.SaveCanonicalPackage(pkg); err != nil {
+		t.Fatalf("save canonical package: %v", err)
+	}
+
+	intent := agents.NormalizeDeliveryIntent(agents.DeliveryIntent{
+		Profile:         agents.IntentCreateJira,
+		InstructionText: "Turn this into a Jira-ready change request.",
+	})
+	redactedPkg := redactPackageForTransmission(*pkg)
+	providerPayload, err := agents.PreviewProviderPayloadWithConfig("codex_cli", redactedPkg, "", "", intent)
+	if err != nil {
+		t.Fatalf("preview provider payload: %v", err)
+	}
+	original := srv.enqueueSubmitJob("codex_cli", redactedPkg, providerPayload, intent, "test", "test")
+	_ = waitForAttemptStatus(t, srv, cfg.ControlToken, original.AttemptID, "submitted", 3*time.Second)
+
+	nextWorkspace := filepath.Join(t.TempDir(), "rerun-workspace")
+	srv.runtimeMu.Lock()
+	srv.runtime.RuntimeCodex.CodexWorkdir = nextWorkspace
+	srv.runtimeMu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/session/attempt/rerun", bytes.NewReader([]byte(`{"attempt_id":"`+original.AttemptID+`"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	addAuth(req, cfg.ControlToken, true, "nonce-rerun-attempt")
+	rec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode rerun response: %v", err)
+	}
+	attempt, _ := payload["attempt"].(map[string]any)
+	rerunAttemptID, _ := attempt["attempt_id"].(string)
+	if rerunAttemptID == "" || rerunAttemptID == original.AttemptID {
+		t.Fatalf("expected new rerun attempt id, got %#v", attempt["attempt_id"])
+	}
+	if got := attempt["provider"]; got != "codex_cli" {
+		t.Fatalf("expected rerun provider codex_cli, got %#v", got)
+	}
+	if got := attempt["intent_profile"]; got != agents.IntentCreateJira {
+		t.Fatalf("expected rerun to preserve intent profile, got %#v", got)
+	}
+	if got := attempt["instruction_text"]; got != "Turn this into a Jira-ready change request." {
+		t.Fatalf("expected rerun to preserve instruction text, got %#v", got)
+	}
+	if got := attempt["workdir_used"]; got != nextWorkspace {
+		t.Fatalf("expected rerun to use updated workspace %q, got %#v", nextWorkspace, got)
+	}
+
+	rerun := waitForAttemptStatus(t, srv, cfg.ControlToken, rerunAttemptID, "submitted", 3*time.Second)
+	if got := rerun["workdir_used"]; got != nextWorkspace {
+		t.Fatalf("expected completed rerun attempt to use updated workspace %q, got %#v", nextWorkspace, got)
+	}
+	if got := rerun["request_preview"]; got != original.RequestPreview {
+		t.Fatalf("expected rerun request preview %q, got %#v", original.RequestPreview, got)
+	}
+}
+
+func TestExtensionSessionIncludesRerunAttemptsFromMainUI(t *testing.T) {
+	t.Setenv("KNIT_CLI_ADAPTER_CMD", `echo '{"run_id":"rerun-submit","status":"accepted","ref":"/tmp/rerun-submit.log"}'`)
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	startPairReq := httptest.NewRequest(http.MethodPost, "/api/extension/pair/start", bytes.NewReader([]byte(`{"name":"Chromium Popup","browser":"chromium"}`)))
+	startPairReq.Header.Set("Content-Type", "application/json")
+	addAuth(startPairReq, cfg.ControlToken, true, "nonce-ext-rerun-start")
+	startPairRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(startPairRec, startPairReq)
+	if startPairRec.Code != http.StatusOK {
+		t.Fatalf("start extension pairing failed: %d %s", startPairRec.Code, startPairRec.Body.String())
+	}
+	var started map[string]any
+	if err := json.Unmarshal(startPairRec.Body.Bytes(), &started); err != nil {
+		t.Fatalf("decode extension pair start: %v", err)
+	}
+	pairingCode, _ := started["pairing_code"].(string)
+	if pairingCode == "" {
+		t.Fatalf("expected pairing code")
+	}
+
+	completeReq := httptest.NewRequest(http.MethodPost, "/api/extension/pair/complete", bytes.NewReader([]byte(`{"pairing_code":"`+pairingCode+`","name":"Sidebar","browser":"chrome","platform":"macOS"}`)))
+	completeReq.Header.Set("Content-Type", "application/json")
+	completeRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(completeRec, completeReq)
+	if completeRec.Code != http.StatusOK {
+		t.Fatalf("complete extension pairing failed: %d %s", completeRec.Code, completeRec.Body.String())
+	}
+	var completed map[string]any
+	if err := json.Unmarshal(completeRec.Body.Bytes(), &completed); err != nil {
+		t.Fatalf("decode extension pair complete: %v", err)
+	}
+	extensionToken, _ := completed["token"].(string)
+	if extensionToken == "" {
+		t.Fatalf("expected extension token")
+	}
+
+	srv.sessions.Start("Browser Preview", "https://example.com")
+	if _, err := srv.sessions.AddFeedback(session.FeedbackEvt{
+		ID:             "evt-rerun-extension",
+		RawTranscript:  "Tighten the checkout spacing",
+		NormalizedText: "Tighten the checkout spacing",
+	}); err != nil {
+		t.Fatalf("add feedback: %v", err)
+	}
+	pkg, err := srv.sessions.Approve("Tighten the checkout spacing")
+	if err != nil {
+		t.Fatalf("approve session: %v", err)
+	}
+	if err := srv.store.SaveCanonicalPackage(pkg); err != nil {
+		t.Fatalf("save canonical package: %v", err)
+	}
+
+	intent := agents.NormalizeDeliveryIntent(agents.DeliveryIntent{
+		Profile:         agents.IntentImplementChanges,
+		InstructionText: "Implement the requested software changes in the current repository.",
+	})
+	redactedPkg := redactPackageForTransmission(*pkg)
+	providerPayload, err := agents.PreviewProviderPayloadWithConfig("codex_cli", redactedPkg, "", "", intent)
+	if err != nil {
+		t.Fatalf("preview provider payload: %v", err)
+	}
+	original := srv.enqueueSubmitJob("codex_cli", redactedPkg, providerPayload, intent, "test", "test")
+	_ = waitForAttemptStatus(t, srv, cfg.ControlToken, original.AttemptID, "submitted", 3*time.Second)
+
+	rerunReq := httptest.NewRequest(http.MethodPost, "/api/session/attempt/rerun", bytes.NewReader([]byte(`{"attempt_id":"`+original.AttemptID+`"}`)))
+	rerunReq.Header.Set("Content-Type", "application/json")
+	addAuth(rerunReq, cfg.ControlToken, true, "nonce-rerun-extension")
+	rerunRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(rerunRec, rerunReq)
+	if rerunRec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rerunRec.Code, rerunRec.Body.String())
+	}
+	var rerunPayload map[string]any
+	if err := json.Unmarshal(rerunRec.Body.Bytes(), &rerunPayload); err != nil {
+		t.Fatalf("decode rerun response: %v", err)
+	}
+	rerunAttempt, _ := rerunPayload["attempt"].(map[string]any)
+	rerunAttemptID, _ := rerunAttempt["attempt_id"].(string)
+	if rerunAttemptID == "" || rerunAttemptID == original.AttemptID {
+		t.Fatalf("expected new rerun attempt id, got %#v", rerunAttempt["attempt_id"])
+	}
+
+	sessionReq := httptest.NewRequest(http.MethodGet, "/api/extension/session", nil)
+	addBearerAuth(sessionReq, extensionToken, false, "")
+	sessionRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(sessionRec, sessionReq)
+	if sessionRec.Code != http.StatusOK {
+		t.Fatalf("extension session failed: %d %s", sessionRec.Code, sessionRec.Body.String())
+	}
+	var sessionPayload map[string]any
+	if err := json.Unmarshal(sessionRec.Body.Bytes(), &sessionPayload); err != nil {
+		t.Fatalf("decode extension session payload: %v", err)
+	}
+	attempts, _ := sessionPayload["submit_attempts"].([]any)
+	if len(attempts) < 2 {
+		t.Fatalf("expected at least 2 submit attempts, got %#v", sessionPayload["submit_attempts"])
+	}
+	firstAttempt, _ := attempts[0].(map[string]any)
+	if got := firstAttempt["attempt_id"]; got != rerunAttemptID {
+		t.Fatalf("expected rerun attempt %q first in extension session, got %#v", rerunAttemptID, got)
+	}
+	if got := firstAttempt["intent_profile"]; got != agents.IntentImplementChanges {
+		t.Fatalf("expected rerun intent profile %q, got %#v", agents.IntentImplementChanges, got)
+	}
+	if got := firstAttempt["instruction_text"]; got != "Implement the requested software changes in the current repository." {
+		t.Fatalf("expected rerun instruction text in extension payload, got %#v", got)
+	}
+}
+
 func TestSubmitIncludesPostSubmitAutomationResult(t *testing.T) {
 	cfg := config.Default()
 	cfg.ControlToken = "test-token"
@@ -5107,6 +5689,124 @@ func TestExtensionPairingPersistsAcrossServerRestart(t *testing.T) {
 	srv.httpSrv.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected restored extension token to authenticate, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestExtensionSessionIncludesCommonSubmitFailureOutcomesForBrowserExtension(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	startPairReq := httptest.NewRequest(http.MethodPost, "/api/extension/pair/start", bytes.NewReader([]byte(`{"name":"Chromium Popup","browser":"chromium"}`)))
+	startPairReq.Header.Set("Content-Type", "application/json")
+	addAuth(startPairReq, cfg.ControlToken, true, "nonce-ext-pair-start-outcomes")
+	startPairRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(startPairRec, startPairReq)
+	if startPairRec.Code != http.StatusOK {
+		t.Fatalf("start extension pairing failed: %d %s", startPairRec.Code, startPairRec.Body.String())
+	}
+	var started map[string]any
+	if err := json.Unmarshal(startPairRec.Body.Bytes(), &started); err != nil {
+		t.Fatalf("decode pairing start: %v", err)
+	}
+	pairingCode, _ := started["pairing_code"].(string)
+	if pairingCode == "" {
+		t.Fatalf("expected pairing code")
+	}
+
+	completeReq := httptest.NewRequest(http.MethodPost, "/api/extension/pair/complete", bytes.NewReader([]byte(`{"pairing_code":"`+pairingCode+`","name":"Popup","browser":"chrome","platform":"macOS"}`)))
+	completeReq.Header.Set("Content-Type", "application/json")
+	completeRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(completeRec, completeReq)
+	if completeRec.Code != http.StatusOK {
+		t.Fatalf("complete extension pairing failed: %d %s", completeRec.Code, completeRec.Body.String())
+	}
+	var completed map[string]any
+	if err := json.Unmarshal(completeRec.Body.Bytes(), &completed); err != nil {
+		t.Fatalf("decode pairing complete: %v", err)
+	}
+	extensionToken, _ := completed["token"].(string)
+	if extensionToken == "" {
+		t.Fatalf("expected extension token")
+	}
+
+	srv.submitMu.Lock()
+	srv.submitAttempts = []submitAttempt{
+		{
+			AttemptID:      "attempt-no-input",
+			Status:         "submitted",
+			OutcomeCode:    submitOutcomeNoInput,
+			OutcomeTitle:   "No input",
+			OutcomeMessage: "Knit submitted this run without any captured change requests or artifacts, so the coding agent had nothing to change.",
+		},
+		{
+			AttemptID:      "attempt-trusted-directory",
+			Status:         "failed",
+			OutcomeCode:    submitOutcomeTrustedDir,
+			OutcomeTitle:   "Trusted directory required",
+			OutcomeMessage: "Go back to Capture, Review, and Send, open Settings, then check Workspace first. If the wrong repository is selected, choose the correct workspace for this project and rerun. If the workspace is already correct, open Settings > Agent and switch Sandbox to danger-full-access before rerunning. Workspace used: /tmp/ruddur.",
+		},
+		{
+			AttemptID:      "attempt-wrong-workspace",
+			Status:         "submitted",
+			OutcomeCode:    submitOutcomeWrongWorkspace,
+			OutcomeTitle:   "Wrong workspace",
+			OutcomeMessage: "Go back to Capture, Review, and Send, open Settings > Workspace, and choose the repository that matches this request before rerunning. Workspace used: /tmp/ruddur.",
+		},
+		{
+			AttemptID:      "attempt-read-only",
+			Status:         "submitted",
+			OutcomeCode:    submitOutcomeReadOnly,
+			OutcomeTitle:   "Read-only",
+			OutcomeMessage: "Go back to Capture, Review, and Send, open Settings > Agent, and switch Sandbox to danger-full-access before rerunning.",
+		},
+	}
+	srv.submitMu.Unlock()
+
+	sessionReq := httptest.NewRequest(http.MethodGet, "/api/extension/session", nil)
+	addBearerAuth(sessionReq, extensionToken, false, "")
+	sessionRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(sessionRec, sessionReq)
+	if sessionRec.Code != http.StatusOK {
+		t.Fatalf("extension session failed: %d %s", sessionRec.Code, sessionRec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(sessionRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode extension session payload: %v", err)
+	}
+	attempts, _ := payload["submit_attempts"].([]any)
+	if len(attempts) != 4 {
+		t.Fatalf("expected 4 submit attempts, got %#v", payload["submit_attempts"])
+	}
+
+	want := map[string]struct {
+		code     string
+		title    string
+		contains string
+	}{
+		"attempt-no-input":          {code: submitOutcomeNoInput, title: "No input", contains: "had nothing to change"},
+		"attempt-trusted-directory": {code: submitOutcomeTrustedDir, title: "Trusted directory required", contains: "open Settings, then check Workspace first"},
+		"attempt-wrong-workspace":   {code: submitOutcomeWrongWorkspace, title: "Wrong workspace", contains: "open Settings > Workspace"},
+		"attempt-read-only":         {code: submitOutcomeReadOnly, title: "Read-only", contains: "open Settings > Agent"},
+	}
+	for _, raw := range attempts {
+		attempt, _ := raw.(map[string]any)
+		id, _ := attempt["attempt_id"].(string)
+		exp, ok := want[id]
+		if !ok {
+			t.Fatalf("unexpected attempt in extension payload: %#v", attempt)
+		}
+		if got := attempt["outcome_code"]; got != exp.code {
+			t.Fatalf("expected outcome_code %q for %s, got %#v", exp.code, id, got)
+		}
+		if got := attempt["outcome_title"]; got != exp.title {
+			t.Fatalf("expected outcome_title %q for %s, got %#v", exp.title, id, got)
+		}
+		message, _ := attempt["outcome_message"].(string)
+		if !strings.Contains(message, exp.contains) {
+			t.Fatalf("expected outcome_message for %s to contain %q, got %q", id, exp.contains, message)
+		}
 	}
 }
 

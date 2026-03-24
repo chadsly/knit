@@ -79,14 +79,20 @@ const indexHTML = `<!doctype html>
       display: grid;
       gap: .9rem;
     }
+    .hero-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+    }
     .hero-brand {
       display: inline-flex;
       align-items: center;
       gap: .85rem;
     }
     .hero-brand-mark {
-      width: 3.6rem;
-      height: 3.6rem;
+      width: 8rem;
+      height: 8rem;
       border-radius: 18px;
       display: block;
       background: var(--panel-solid);
@@ -131,10 +137,8 @@ const indexHTML = `<!doctype html>
       white-space: nowrap;
     }
     .hero-topline {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 1rem;
+      display: grid;
+      gap: .4rem;
     }
     body.guide-open .wrap { margin-right: calc(var(--guide-width) + 1.5rem); }
     .panel {
@@ -418,12 +422,134 @@ const indexHTML = `<!doctype html>
       min-height: 60px;
       align-items: flex-start;
       flex-direction: column;
+      position: relative;
+      gap: .8rem;
+    }
+    .status-card.focused-attempt {
+      border-color: rgba(28, 124, 116, 0.46);
+      box-shadow: 0 0 0 1px rgba(28, 124, 116, 0.18), var(--shadow);
+    }
+    .submit-attempt-header {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: .8rem 1rem;
+      align-items: start;
+    }
+    .submit-attempt-main {
+      min-width: 0;
+      display: grid;
+      gap: .3rem;
+    }
+    .submit-attempt-title {
+      display: block;
+      padding-right: .2rem;
+    }
+    .submit-attempt-status-line {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      flex-wrap: wrap;
+    }
+    .submit-attempt-meta {
+      display: grid;
+      justify-items: end;
+      gap: .5rem;
+      min-width: max-content;
+    }
+    .submit-attempt-meta-top {
+      display: inline-flex;
+      align-items: center;
+      gap: .55rem;
+    }
+    .submit-attempt-time {
+      white-space: nowrap;
+    }
+    .submit-attempt-action-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: .4rem;
+      flex-wrap: wrap;
+    }
+    .submit-attempt-card {
+      width: 100%;
+      padding: 0;
+      overflow: hidden;
+    }
+    .submit-attempt-card > summary {
+      list-style: none;
+      cursor: pointer;
+      display: block;
+      padding: .9rem 1rem;
+    }
+    .submit-attempt-card > summary::-webkit-details-marker {
+      display: none;
+    }
+    .submit-attempt-card .submit-attempt-header {
+      margin: 0;
+    }
+    .submit-attempt-summary-request {
+      color: var(--muted);
+      font-size: .92rem;
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+    .submit-attempt-body {
+      display: grid;
+      gap: .8rem;
+      padding: 0 1rem 1rem;
+      border-top: 1px solid var(--line);
     }
     .status-card strong {
       color: var(--text);
       font-size: .84rem;
       letter-spacing: .02em;
       text-transform: uppercase;
+    }
+    .submit-attempt-indicator {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.65rem;
+      height: 1.65rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(255, 255, 255, 0.92);
+      color: #52607a;
+      font-size: .9rem;
+      line-height: 1;
+      box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+    }
+    .submit-attempt-indicator.ok {
+      color: #0f766e;
+      border-color: rgba(15, 118, 110, 0.28);
+      background: rgba(236, 253, 245, 0.98);
+    }
+    .submit-attempt-indicator.warn {
+      color: #b45309;
+      border-color: rgba(180, 83, 9, 0.28);
+      background: rgba(255, 251, 235, 0.98);
+    }
+    .submit-attempt-indicator.error {
+      color: #b42318;
+      border-color: rgba(180, 35, 24, 0.28);
+      background: rgba(254, 242, 242, 0.98);
+    }
+    @media (max-width: 760px) {
+      .submit-attempt-header {
+        grid-template-columns: 1fr;
+      }
+      .submit-attempt-meta {
+        width: 100%;
+        min-width: 0;
+        justify-items: start;
+      }
+      .submit-attempt-action-row {
+        justify-content: flex-start;
+      }
     }
     .update-banner {
       display: flex;
@@ -590,6 +716,33 @@ const indexHTML = `<!doctype html>
       position: relative;
       padding-top: 1.1rem;
       margin-bottom: .4rem;
+    }
+    .capture-guide-title {
+      display: inline-flex;
+      align-items: center;
+      gap: .7rem;
+    }
+    .capture-guide-title-mark {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+      box-shadow: inset 0 0 0 1px rgba(28, 124, 116, 0.12);
+    }
+    .capture-guide-title-mark svg,
+    .capture-guide-toggle svg {
+      width: 1.28rem;
+      height: 1.28rem;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
     .capture-guide-close {
       position: absolute;
@@ -911,6 +1064,9 @@ const indexHTML = `<!doctype html>
         width: 100%;
         justify-content: center;
       }
+      .hero-header .theme-toggle {
+        width: 3rem;
+      }
     }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   </style>
@@ -920,20 +1076,22 @@ const indexHTML = `<!doctype html>
     <section class="hero panel">
       <div class="hero-grid">
         <div class="hero-copy-block">
-          <div class="hero-brand">
-            <img class="hero-brand-mark" src="/docs/assets/knit-mark.png" alt="Knit logo" />
-            <div class="hero-brand-copy">
-              <span class="hero-brand-name">Knit</span>
-              <span class="hero-brand-tagline">Local-first multimodal AI feedback runtime</span>
-              <div class="hero-version-row">
-                <span id="currentVersionLabel" class="hero-version-chip">Version loading...</span>
-                <button id="manualUpdateCheckBtn" class="secondary update-check-btn" onclick="checkForUpdates(true)" title="Check for updates">Check for updates</button>
+          <div class="hero-header">
+            <div class="hero-brand">
+              <img class="hero-brand-mark" src="/docs/assets/knit-mark.png" alt="Knit logo" />
+              <div class="hero-brand-copy">
+                <span class="hero-brand-name">Knit</span>
+                <span class="hero-brand-tagline">Local-first multimodal AI feedback runtime</span>
+                <div class="hero-version-row">
+                  <span id="currentVersionLabel" class="hero-version-chip">Version loading...</span>
+                  <button id="manualUpdateCheckBtn" class="secondary update-check-btn" onclick="checkForUpdates(true)" title="Check for updates">Check for updates</button>
+                </div>
               </div>
             </div>
+            <button id="themeToggleBtn" class="icon-btn theme-toggle" onclick="toggleTheme()" title="Switch to dark theme" aria-label="Switch to dark theme">☾</button>
           </div>
           <div class="hero-topline">
             <h1>Capture what should change. Tell your agent.</h1>
-            <button id="themeToggleBtn" class="icon-btn theme-toggle" onclick="toggleTheme()" title="Switch to dark theme" aria-label="Switch to dark theme">☾</button>
           </div>
           <p class="hero-copy">Start a review session, connect to a webpage, use the composer to point at the interface, record what needs to change, and hand off a structured request to your coding agent.</p>
         </div>
@@ -1014,7 +1172,6 @@ const indexHTML = `<!doctype html>
             <p class="capture-option-copy">Pair the browser extension and work from the page you are reviewing without bouncing back to the main UI.</p>
             <div style="display:grid;gap:.45rem;justify-items:start;">
               <button class="secondary toolbar-button" onclick="startExtensionPairing()" title="Generate a browser extension pairing code">⌁ <span>Generate extension token</span></button>
-              <button class="secondary toolbar-button" onclick="openDocsBrowser('GETTING_STARTED.md')" title="Open extension install guide">↗ <span>Install guide</span></button>
               <code id="extensionPairingCodeState" class="capture-option-code">No active pairing code.</code>
             </div>
           </section>
@@ -1118,24 +1275,39 @@ const indexHTML = `<!doctype html>
     </div>
   </div>
 
-  <button id="guideInfoBtn" class="capture-guide-toggle hidden" onclick="openCaptureGuideSidebar()" title="Open Capture Guide" aria-label="Open Capture Guide">ℹ️</button>
+  <button id="guideInfoBtn" class="capture-guide-toggle hidden" onclick="openCaptureGuideSidebar()" title="Open Capture Guide" aria-label="Open Capture Guide">
+    <svg viewBox="0 0 24 24" aria-hidden="true" data-guide-icon="capture">
+      <path d="M8.5 6.5h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z"/>
+      <path d="M9.5 4.5h5"/>
+      <path d="m11 12 1.5 1.5 3-3.5"/>
+    </svg>
+  </button>
   <div id="appToast" class="toast" role="status" aria-live="polite"></div>
   <aside id="captureGuideSidebar" class="capture-guide-sidebar">
     <div class="capture-guide-header">
       <button class="danger icon-btn capture-guide-close" onclick="closeCaptureGuideSidebar()" title="Close Capture Guide" aria-label="Close Capture Guide">✕</button>
-      <h3>Capture Guide (Step By Step)</h3>
+      <div class="capture-guide-title">
+        <span class="capture-guide-title-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M8.5 6.5h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z"/>
+            <path d="M9.5 4.5h5"/>
+            <path d="m11 12 1.5 1.5 3-3.5"/>
+          </svg>
+        </span>
+        <h3>Capture Guide</h3>
+      </div>
     </div>
     <div style="font-size:.95rem;color:var(--muted);line-height:1.65;">
-      1. Start the review session.<br/>
-      2. Click <strong>Connect browser</strong>, then run the copied snippet in the browser tab you are reviewing.<br/>
-      3. Open <strong>Video</strong> and enable visual capture for the same browser window or tab.<br/>
-      4. Open <strong>Audio</strong> and confirm your mic mode and input. Changes apply automatically.<br/>
-      5. Open the <strong>popout composer</strong> and record audio notes while you stay on the page being reviewed.<br/>
-      6. Come back here to preview the request or submit it to your coding agent.
+      1. Choose the repository in <strong>Workspace</strong> so the coding agent edits the right project.<br/>
+      2. Start the review session for the page or app you want to change.<br/>
+      3. Pick one capture path:
+      <br/>   • <strong>Chrome Extension</strong> for text, snapshots, audio, video, preview, and submit while you stay on the page.
+      <br/>   • <strong>Main UI</strong> when you want to capture and submit directly from Knit.
+      <br/>   • <strong>Popout Composer</strong> when you want a smaller floating controller instead of the full page.<br/>
+      4. Use <strong>Connect browser</strong> only when Knit needs live browser context from the tab itself, mainly for main-UI or popout snapshot/video grounding.<br/>
+      5. Capture one or more notes. Text-only notes are valid. Add snapshots, audio, or video only when they help explain the change.<br/>
+      6. Preview the request, then submit it. Watch <strong>Live agent output</strong> while the run is active, and use the refresh button in <strong>Recent runs</strong> to rerun the same request with updated settings.
     </div>
-    <pre id="captureGuideStatus">capture readiness: loading...</pre>
-    <div id="platformRuntimeState" style="font-size:.9rem;color:var(--muted);margin-top:.45rem;">platform runtime: loading...</div>
-    <div id="composerSupportState" style="font-size:.9rem;color:var(--muted);margin-top:.45rem;">composer popup status: loading...</div>
   </aside>
 
   <div id="captureSettingsModal" class="modal-overlay hidden" onclick="onCaptureSettingsModalBackdrop(event)">
@@ -1531,7 +1703,8 @@ const indexHTML = `<!doctype html>
 
       <section id="codexCLIDefaultsSection" class="runtime-section">
         <h4>Codex CLI Defaults</h4>
-        <div class="runtime-inline-note" id="codexDefaultBehavior">Knit defaults local coding-agent runs to <code>workspace-write</code> sandbox and <code>never</code> approval so implementation requests can complete without falling back to read-only behavior.</div>
+        <div class="runtime-inline-note" id="codexDefaultBehavior">Knit defaults local coding-agent runs to <code>danger-full-access</code> sandbox and <code>never</code> approval so implementation requests can make changes without extra setup.</div>
+        <div class="runtime-inline-note" id="codexSandboxWarning">Knit is ready to let the coding agent make changes in this repository.</div>
         <div class="field-grid">
           <label class="field">
             <span class="field-label">Sandbox</span>
@@ -1600,9 +1773,6 @@ const codexRuntimeModalEl = document.getElementById('codexRuntimeModal');
 const captureGuideSidebarEl = document.getElementById('captureGuideSidebar');
 const guideInfoBtnEl = document.getElementById('guideInfoBtn');
 const appToastEl = document.getElementById('appToast');
-const captureGuideStatusEl = document.getElementById('captureGuideStatus');
-const platformRuntimeStateEl = document.getElementById('platformRuntimeState');
-const composerSupportStateEl = document.getElementById('composerSupportState');
 const extensionPairingCodeStateEl = document.getElementById('extensionPairingCodeState');
 const extensionPairingListEl = document.getElementById('extensionPairingList');
 const audioNoteBtnEl = document.getElementById('audioNoteBtn');
@@ -1679,6 +1849,7 @@ const opencodeCliTimeoutSecondsEl = document.getElementById('opencodeCliTimeoutS
 const submitExecutionModeEl = document.getElementById('submitExecutionMode');
 const codexSandboxEl = document.getElementById('codexSandbox');
 const codexApprovalEl = document.getElementById('codexApproval');
+const codexSandboxWarningEl = document.getElementById('codexSandboxWarning');
 const codexSkipRepoCheckEl = document.getElementById('codexSkipRepoCheck');
 const codexProfileEl = document.getElementById('codexProfile');
 const codexModelEl = document.getElementById('codexModel');
@@ -1753,7 +1924,9 @@ let liveLogUnavailableForAttempt = '';
 let watchedSubmitAttemptIDs = new Set();
 let submitAttemptStatusByID = new Map();
 let submitAttemptNotificationsReady = false;
+let openSubmitAttemptCardIDs = new Set();
 let openSubmitAttemptRawJSONIDs = new Set();
+let submitAttemptOutputScrollTopByID = new Map();
 let submitAttemptRawJSONScrollTopByID = new Map();
 let latestPayloadPreviewData = null;
 let stateRefreshError = '';
@@ -1984,6 +2157,8 @@ function truncateSubmitToastText(value, limit = 88) {
 }
 
 function submitAttemptToastMessage(attempt) {
+  const outcomeMessage = submitAttemptOutcomeToastMessage(attempt);
+  if (outcomeMessage) return outcomeMessage;
   const status = String(attempt?.status || '').trim();
   const request = truncateSubmitToastText(requestPreviewText(attempt));
   const attemptID = String(attempt?.attempt_id || '').trim();
@@ -1997,6 +2172,53 @@ function submitAttemptToastMessage(attempt) {
   }
   if (request) return 'Request completed: ' + request;
   return 'Request completed' + (attemptID ? ' (' + attemptID + ')' : '.');
+}
+
+function submitAttemptOutcomeTitle(attempt) {
+  return String(attempt?.outcome_title || '').trim();
+}
+
+function submitAttemptOutcomeMessage(attempt) {
+  return String(attempt?.outcome_message || '').trim();
+}
+
+function submitAttemptNeedsAttention(attempt) {
+  return String(attempt?.outcome_code || '').trim().length > 0;
+}
+
+function submitAttemptOutcomeToastMessage(attempt) {
+  const title = submitAttemptOutcomeTitle(attempt);
+  const message = truncateSubmitToastText(submitAttemptOutcomeMessage(attempt));
+  if (title && message) return title + ': ' + message;
+  return message || title;
+}
+
+function submitAttemptOutcomeListItem(attempt) {
+  const title = submitAttemptOutcomeTitle(attempt);
+  const message = submitAttemptOutcomeMessage(attempt);
+  if (!title && !message) return '';
+  return '<li><strong>Result:</strong> ' + escapePreviewHTML(title + (message ? ': ' + message : '')) + '</li>';
+}
+
+function submitAttemptIndicatorState(attempt) {
+  const status = String(attempt?.status || '').trim();
+  if (status === 'failed') return { symbol: '✕', tone: 'error', label: 'Failed run' };
+  if (status === 'canceled') return { symbol: '−', tone: 'warn', label: 'Canceled run' };
+  if (status === 'submitted') {
+    if (submitAttemptNeedsAttention(attempt)) return { symbol: '!', tone: 'warn', label: 'Completed with issues' };
+    return { symbol: '✓', tone: 'ok', label: 'Successful run' };
+  }
+  if (status === 'in_progress') return { symbol: '…', tone: '', label: 'Run in progress' };
+  if (status === 'queued' || status === 'retry_wait' || status === 'deferred_offline') return { symbol: '•', tone: '', label: 'Run pending' };
+  return { symbol: '?', tone: '', label: 'Run status unknown' };
+}
+
+function renderSubmitAttemptIndicator(attempt) {
+  const indicator = submitAttemptIndicatorState(attempt);
+  return '<span class="submit-attempt-indicator' + (indicator.tone ? ' ' + indicator.tone : '') + '" title="' +
+    escapePreviewHTML(indicator.label) + '" aria-label="' + escapePreviewHTML(indicator.label) + '">' +
+    escapePreviewHTML(indicator.symbol) +
+  '</span>';
 }
 
 function notifySubmitAttemptTransitions(attempts) {
@@ -2020,7 +2242,7 @@ function notifySubmitAttemptTransitions(attempts) {
     const watched = watchedSubmitAttemptIDs.has(attemptID);
     const transitioned = prevStatus !== status;
     if (isTerminalSubmitStatus(status) && transitioned && (watched || prevStatus)) {
-      showToast(submitAttemptToastMessage(attempt), status === 'failed');
+      showToast(submitAttemptToastMessage(attempt), status === 'failed' || submitAttemptNeedsAttention(attempt));
       watchedSubmitAttemptIDs.delete(attemptID);
     }
     nextStatuses.set(attemptID, status);
@@ -2386,8 +2608,21 @@ function syncCodexRuntimeModeUI() {
       runtimeProviderHelpEl.textContent = 'OpenCode CLI only needs its command and timeout here. Codex-only sandbox, approval, model, and reasoning settings stay hidden.';
       break;
     default:
-      runtimeProviderHelpEl.textContent = 'Codex CLI uses Knit defaults of workspace-write sandbox and never approval unless you explicitly choose different values here.';
+      runtimeProviderHelpEl.textContent = 'Codex CLI uses Knit defaults of danger-full-access sandbox and never approval unless you explicitly choose different values here.';
       break;
+    }
+  }
+  if (codexSandboxWarningEl) {
+    const sandbox = String(codexSandboxEl?.value || '').trim() || 'read-only';
+    if (provider !== 'codex_cli') {
+      codexSandboxWarningEl.textContent = 'Sandbox controls only apply to Codex CLI runs.';
+      codexSandboxWarningEl.style.color = '#6a7383';
+    } else if (sandbox !== 'danger-full-access') {
+      codexSandboxWarningEl.textContent = 'Allow the coding agent to make changes by switching Sandbox to danger-full-access. Lower sandbox modes can leave the run read-only or block required edits.';
+      codexSandboxWarningEl.style.color = '#c34f4f';
+    } else {
+      codexSandboxWarningEl.textContent = 'Knit is ready to let the coding agent make changes in this repository.';
+      codexSandboxWarningEl.style.color = '#1f8f63';
     }
   }
 }
@@ -2635,56 +2870,6 @@ function requireCompanionFor(action) {
   return false;
 }
 
-function renderCaptureGuideStatus() {
-  if (!captureGuideStatusEl) return;
-  const sess = currentState?.session || {};
-  const sessionActive = !!sess.id;
-  const sources = currentState?.capture_sources || {};
-  const companion = String(sources?.companion?.status || 'unknown');
-  const screen = String(sources?.screen?.status || 'unknown');
-  const audio = currentState?.audio?.state || {};
-  const mode = String(audio.mode || 'always_on');
-  const muted = !!audio.muted;
-  const paused = !!audio.paused;
-  const transcriptMode = String(currentState?.transcription_mode || 'faster_whisper');
-  const targetWindow = String(sess.target_window || DEFAULT_TARGET_WINDOW);
-  const targetURL = String(sess.target_url || 'pending browser companion');
-
-  const lines = [
-    'Session started: ' + (sessionActive ? 'yes' : 'no'),
-    'Review label: ' + targetWindow,
-    'Target URL: ' + targetURL,
-    'Companion attached (target app tab): ' + companion,
-    'Visual capture enabled: ' + screen,
-    'Audio ready: mode=' + mode + ', muted=' + muted + ', paused=' + paused,
-    'Transcription mode: ' + transcriptMode,
-    'Tip: use the 🔗 icon to copy companion snippet, then run it in target-tab DevTools.',
-    'Tip: mouse capture comes from the target app tab after companion injection, not from this Knit tab.',
-    mode === 'push_to_talk'
-      ? 'Tip: push_to_talk only captures while this Knit tab is focused and Space is held. Use always_on for cross-tab feedback.'
-      : 'Tip: always_on is recommended while switching between tabs/windows during review.'
-  ];
-  captureGuideStatusEl.textContent = lines.join('\n');
-}
-
-function renderComposerSupportStatus() {
-  if (!composerSupportStateEl) return;
-  const secure = !!window.isSecureContext;
-  composerSupportStateEl.textContent = 'Composer popup uses window.open. Browser may block popups; allow popups for 127.0.0.1:7777. Always-on-top is browser/OS dependent.';
-}
-
-function renderPlatformRuntimeStatus() {
-  if (!platformRuntimeStateEl) return;
-  const runtimePlatform = currentState?.runtime_platform || {};
-  const profile = currentState?.platform_profile || {};
-  const summary = String(runtimePlatform.runtime_summary || '').trim();
-  const hostTarget = String(runtimePlatform.host_target || '').trim();
-  const installerHint = String(runtimePlatform.installer_hint || '').trim();
-  const displayName = String(profile.display_name || 'Current OS').trim();
-  const fallback = displayName + ': browser-first review, local web UI, and ' + (installerHint || 'portable archive') + ' packaging.';
-  platformRuntimeStateEl.textContent = 'Platform runtime: ' + (summary || fallback) + (hostTarget ? ' Host target: ' + hostTarget + '.' : '');
-}
-
 function currentSessionStatus() {
   return String(currentState?.session?.status || '').trim().toLowerCase();
 }
@@ -2860,15 +3045,29 @@ function renderOversizedVideoWarningActions(preview) {
 function renderSubmitAttempts() {
   const attempts = Array.isArray(currentState?.submit_attempts) ? currentState.submit_attempts : [];
   if (!attempts.length) {
+    openSubmitAttemptCardIDs = new Set();
     openSubmitAttemptRawJSONIDs = new Set();
+    submitAttemptOutputScrollTopByID = new Map();
     submitAttemptRawJSONScrollTopByID = new Map();
     submitResultEl.textContent = 'No runs yet. Recent agent requests will appear here.';
     return;
   }
   snapshotSubmitAttemptOpenState();
-  submitResultEl.innerHTML = '<div class="flow-stack">' + attempts.slice(0, 8).map(renderSubmitAttemptHistoryCard).join('') + '</div>';
+  submitResultEl.innerHTML = '<div class="flow-stack">' + attempts.slice(0, 8).map((attempt, index) => renderSubmitAttemptHistoryCard(attempt, index)).join('') + '</div>';
   restoreSubmitAttemptOpenState();
   void hydrateSubmitAttemptOutputs();
+}
+
+function submitAttemptCardShouldStartOpen(attempt, index) {
+  const attemptID = String(attempt?.attempt_id || '').trim();
+  if (!attemptID) return index === 0;
+  if (attemptID === requestedSubmitAttemptIDFromLocation()) return true;
+  if (String(attempt?.status || '').trim() === 'in_progress') return true;
+  return index === 0;
+}
+
+function submitAttemptScrollKey(attemptID, section) {
+  return String(attemptID || '').trim() + ':' + String(section || '').trim();
 }
 
 function formatAttemptClock(value) {
@@ -2918,6 +3117,12 @@ function renderCancelSubmitAttemptButton(attempt, label = 'Stop request') {
   return '<button type="button" class="secondary" onclick="cancelSubmitAttempt(\'' + escapePreviewHTML(attemptID) + '\')" title="' + escapePreviewHTML(label) + '" style="padding:.38rem .72rem;white-space:nowrap;">' + escapePreviewHTML(label) + '</button>';
 }
 
+function renderRerunSubmitAttemptButton(attempt) {
+  const attemptID = String(attempt?.attempt_id || '').trim();
+  if (!attemptID) return '';
+  return '<button type="button" class="secondary" onclick="rerunSubmitAttempt(\'' + escapePreviewHTML(attemptID) + '\')" title="Rerun request with current settings" aria-label="Rerun request with current settings" style="padding:.38rem .6rem;min-width:2.35rem;">↻</button>';
+}
+
 function providerDestinationLabel(provider) {
   const value = String(provider || '').trim();
   switch (value) {
@@ -2936,28 +3141,53 @@ function providerDestinationLabel(provider) {
 
 function snapshotSubmitAttemptOpenState() {
   if (!submitResultEl) return;
+  const nextCardIDs = new Set();
   const nextRawJSONIDs = new Set();
+  const nextOutputScrollTopByID = new Map();
   const nextRawJSONScrollTopByID = new Map();
   submitResultEl.querySelectorAll('[data-submit-attempt-id]').forEach(card => {
     const attemptID = String(card.getAttribute('data-submit-attempt-id') || '').trim();
     if (!attemptID) return;
+    if (card.open) {
+      nextCardIDs.add(attemptID);
+    }
+    card.querySelectorAll('[data-submit-attempt-output]').forEach((panel) => {
+      const section = String(panel.getAttribute('data-submit-attempt-output') || '').trim();
+      if (section && panel.scrollTop > 0) {
+        nextOutputScrollTopByID.set(submitAttemptScrollKey(attemptID, section), panel.scrollTop);
+      }
+    });
     const rawJSON = card.querySelector('[data-submit-attempt-raw-json]');
-    if (!rawJSON?.open) return;
-    nextRawJSONIDs.add(attemptID);
-    const rawJSONPre = rawJSON.querySelector('[data-submit-attempt-raw-json-body]');
-    if (rawJSONPre && rawJSONPre.scrollTop > 0) {
-      nextRawJSONScrollTopByID.set(attemptID, rawJSONPre.scrollTop);
+    if (rawJSON?.open) {
+      nextRawJSONIDs.add(attemptID);
+      const rawJSONPre = rawJSON.querySelector('[data-submit-attempt-raw-json-body]');
+      if (rawJSONPre && rawJSONPre.scrollTop > 0) {
+        nextRawJSONScrollTopByID.set(attemptID, rawJSONPre.scrollTop);
+      }
     }
   });
+  openSubmitAttemptCardIDs = nextCardIDs;
   openSubmitAttemptRawJSONIDs = nextRawJSONIDs;
+  submitAttemptOutputScrollTopByID = nextOutputScrollTopByID;
   submitAttemptRawJSONScrollTopByID = nextRawJSONScrollTopByID;
 }
 
 function restoreSubmitAttemptOpenState() {
   if (!submitResultEl) return;
-  submitResultEl.querySelectorAll('[data-submit-attempt-id]').forEach(card => {
+  submitResultEl.querySelectorAll('[data-submit-attempt-id]').forEach((card, index) => {
     const attemptID = String(card.getAttribute('data-submit-attempt-id') || '').trim();
     if (!attemptID) return;
+    card.open = openSubmitAttemptCardIDs.size > 0
+      ? openSubmitAttemptCardIDs.has(attemptID)
+      : submitAttemptCardShouldStartOpen(findSubmitAttemptById(attemptID), index);
+    card.querySelectorAll('[data-submit-attempt-output]').forEach((panel) => {
+      const section = String(panel.getAttribute('data-submit-attempt-output') || '').trim();
+      if (!section) return;
+      const scrollTop = Number(submitAttemptOutputScrollTopByID.get(submitAttemptScrollKey(attemptID, section)) || 0);
+      if (scrollTop > 0) {
+        panel.scrollTop = scrollTop;
+      }
+    });
     const rawJSON = card.querySelector('[data-submit-attempt-raw-json]');
     if (rawJSON) {
       rawJSON.open = openSubmitAttemptRawJSONIDs.has(attemptID);
@@ -3030,10 +3260,8 @@ async function hydrateSubmitAttemptOutputs() {
     submitAttemptOutputPreviewInflight.add(attemptID);
     submitAttemptOutputPreviewByID.set(attemptID, { status: 'loading', text: '' });
     try {
-      const status = String(attempt?.status || '').trim();
-      const useTail = status !== 'in_progress' && status !== 'queued';
       const path = '/api/session/attempt/log?attempt_id=' + encodeURIComponent(attemptID) +
-        '&offset=0&limit=24000' + (useTail ? '&tail=1' : '');
+        '&offset=0&limit=24000';
       const res = await fetch(path, { headers: authHeaders(false) });
       const txt = await res.text();
       if (!res.ok) throw new Error(txt || ('HTTP ' + res.status));
@@ -3052,31 +3280,58 @@ async function hydrateSubmitAttemptOutputs() {
   }
   if (submitResultEl) {
     snapshotSubmitAttemptOpenState();
-    submitResultEl.innerHTML = '<div class="flow-stack">' + visible.map(renderSubmitAttemptHistoryCard).join('') + '</div>';
+    submitResultEl.innerHTML = '<div class="flow-stack">' + visible.map((attempt, index) => renderSubmitAttemptHistoryCard(attempt, index)).join('') + '</div>';
     restoreSubmitAttemptOpenState();
+    focusSubmitAttemptFromLocation();
   }
+}
+
+function requestedSubmitAttemptIDFromLocation() {
+  try {
+    const url = new URL(window.location.href);
+    return String(url.searchParams.get('attempt_id') || '').trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+function focusSubmitAttemptFromLocation() {
+  if (!submitResultEl) return;
+  const requestedID = requestedSubmitAttemptIDFromLocation();
+  submitResultEl.querySelectorAll('.focused-attempt').forEach(card => card.classList.remove('focused-attempt'));
+  if (!requestedID) return;
+  const card = Array.from(submitResultEl.querySelectorAll('[data-submit-attempt-id]')).find(item =>
+    String(item.getAttribute('data-submit-attempt-id') || '').trim() === requestedID
+  );
+  if (!card) return;
+  const container = submitResultEl.closest('details');
+  if (container) container.open = true;
+  card.open = true;
+  card.classList.add('focused-attempt');
+  card.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
 function renderSubmitAttemptOutput(attempt) {
   const output = submitAttemptOutputText(attempt);
+  const summary = String(attempt?.agent_summary || '').trim();
   if (!output) {
-    return '<li><strong>Output:</strong> Still running, queued, or waiting for a result reference.</li>';
+    return '<li><strong>Output:</strong> ' + (summary ? ('<div class="flow-stack" style="margin-top:.35rem;"><div><div class="helper" style="margin-bottom:.3rem;"><strong>Agent summary</strong></div><pre data-submit-attempt-output="summary" style="max-height:140px;overflow:auto;white-space:pre-wrap;">' + escapePreviewHTML(summary) + '</pre></div></div>') : 'Still running, queued, or waiting for a result reference.') + '</li>';
   }
   if (!submitAttemptOutputHasPreview(attempt)) {
-    return '<li><strong>Output:</strong> ' + escapePreviewHTML(output) + '</li>';
+    return '<li><strong>Output:</strong> ' + (summary ? ('<div class="flow-stack" style="margin-top:.35rem;"><div><div class="helper" style="margin-bottom:.3rem;"><strong>Agent summary</strong></div><pre data-submit-attempt-output="summary" style="max-height:140px;overflow:auto;white-space:pre-wrap;">' + escapePreviewHTML(summary) + '</pre></div><div>' + escapePreviewHTML(output) + '</div></div>') : escapePreviewHTML(output)) + '</li>';
   }
   const split = splitLiveAgentOutputForDisplay(output);
   const work = split.work || 'No work log captured for this run.';
-  const commentary = split.commentary || 'No agent commentary captured for this run.';
+  const commentary = ((summary ? ('Summary: ' + summary + '\n\n') : '') + (split.commentary || '')).trim() || 'No agent commentary captured for this run.';
   return '<li><strong>Output:</strong>' +
     '<div class="flow-stack" style="margin-top:.35rem;">' +
       '<div>' +
         '<div class="helper" style="margin-bottom:.3rem;"><strong>Work log</strong></div>' +
-        '<pre style="max-height:180px;overflow:auto;white-space:pre-wrap;">' + escapePreviewHTML(work) + '</pre>' +
+        '<pre data-submit-attempt-output="work" style="max-height:180px;overflow:auto;white-space:pre-wrap;">' + escapePreviewHTML(work) + '</pre>' +
       '</div>' +
       '<div>' +
         '<div class="helper" style="margin-bottom:.3rem;"><strong>Agent commentary</strong></div>' +
-        '<pre style="max-height:180px;overflow:auto;white-space:pre-wrap;">' + escapePreviewHTML(commentary) + '</pre>' +
+        '<pre data-submit-attempt-output="commentary" style="max-height:180px;overflow:auto;white-space:pre-wrap;">' + escapePreviewHTML(commentary) + '</pre>' +
       '</div>' +
     '</div>' +
   '</li>';
@@ -3102,7 +3357,7 @@ function submitAttemptWhen(attempt) {
   return '';
 }
 
-function renderSubmitAttemptHistoryCard(attempt) {
+function renderSubmitAttemptHistoryCard(attempt, index = 0) {
   const id = String(attempt?.attempt_id || 'attempt');
   const status = String(attempt?.status || 'unknown');
   const provider = String(attempt?.provider || 'agent');
@@ -3110,32 +3365,47 @@ function renderSubmitAttemptHistoryCard(attempt) {
   const mode = String(attempt?.mode || 'series');
   const when = submitAttemptWhen(attempt);
   const request = requestPreviewText(attempt) || 'No request preview captured.';
-  const output = submitAttemptOutputText(attempt);
   const retry = Number(attempt?.retry_count || 0);
   const maxAttempts = Math.max(1, Number(attempt?.max_attempts || 1));
   const wait = Number(attempt?.queue_wait_ms || 0);
   const lastUpdate = submitAttemptLastUpdate(attempt);
   const rawJSON = escapePreviewHTML(JSON.stringify(attempt, null, 2));
-  return '<div class="status-card" data-submit-attempt-id="' + escapePreviewHTML(id) + '">' +
-    '<div class="row" style="justify-content:space-between;align-items:flex-start;gap:.75rem;">' +
-      '<div><strong>' + escapePreviewHTML(destination) + '</strong><div class="helper">Status: ' + escapePreviewHTML(status) + '</div></div>' +
-      '<div style="text-align:right;">' +
-        '<div class="helper">' + escapePreviewHTML(when || 'recently') + '</div>' +
-        (renderCancelSubmitAttemptButton(attempt, status === 'in_progress' ? 'Stop request' : 'Remove from queue') ? '<div style="margin-top:.4rem;">' + renderCancelSubmitAttemptButton(attempt, status === 'in_progress' ? 'Stop request' : 'Remove from queue') + '</div>' : '') +
+  return '<details class="status-card submit-attempt-card" data-submit-attempt-id="' + escapePreviewHTML(id) + '"' +
+      (submitAttemptCardShouldStartOpen(attempt, index) ? ' open' : '') + '>' +
+    '<summary>' +
+      '<div class="submit-attempt-header">' +
+        '<div class="submit-attempt-main">' +
+          '<strong class="submit-attempt-title">' + escapePreviewHTML(destination) + '</strong>' +
+          '<div class="helper submit-attempt-status-line">Status: ' + escapePreviewHTML(status) + '</div>' +
+          '<div class="submit-attempt-summary-request">' + escapePreviewHTML(request) + '</div>' +
+        '</div>' +
+        '<div class="submit-attempt-meta">' +
+          '<div class="submit-attempt-meta-top">' +
+            '<div class="helper submit-attempt-time">' + escapePreviewHTML(when || 'recently') + '</div>' +
+            renderSubmitAttemptIndicator(attempt) +
+          '</div>' +
+        '</div>' +
       '</div>' +
+    '</summary>' +
+    '<div class="submit-attempt-body">' +
+      '<div class="submit-attempt-action-row">' +
+        renderRerunSubmitAttemptButton(attempt) +
+        renderCancelSubmitAttemptButton(attempt, status === 'in_progress' ? 'Stop request' : 'Remove from queue') +
+      '</div>' +
+      '<ul class="status-list">' +
+        '<li><strong>Request:</strong> ' + escapePreviewHTML(request) + '</li>' +
+        submitAttemptOutcomeListItem(attempt) +
+        submitAttemptWorkspaceListItem(attempt) +
+        renderSubmitAttemptOutput(attempt) +
+        '<li><strong>Details:</strong> ' + escapePreviewHTML(id) + ' • ' + escapePreviewHTML(mode) + ' mode • retry ' + retry + '/' + maxAttempts + (wait > 0 ? ' • waited ' + wait + 'ms' : '') + '</li>' +
+        (lastUpdate ? '<li><strong>Latest update:</strong> ' + escapePreviewHTML(lastUpdate) + '</li>' : '') +
+      '</ul>' +
+      '<details data-submit-attempt-raw-json>' +
+        '<summary>Raw JSON</summary>' +
+        '<pre data-submit-attempt-raw-json-body style="margin-top:.45rem;max-height:180px;overflow:auto;white-space:pre-wrap;">' + rawJSON + '</pre>' +
+      '</details>' +
     '</div>' +
-    '<ul class="status-list">' +
-      '<li><strong>Request:</strong> ' + escapePreviewHTML(request) + '</li>' +
-      submitAttemptWorkspaceListItem(attempt) +
-      renderSubmitAttemptOutput(attempt) +
-      '<li><strong>Details:</strong> ' + escapePreviewHTML(id) + ' • ' + escapePreviewHTML(mode) + ' mode • retry ' + retry + '/' + maxAttempts + (wait > 0 ? ' • waited ' + wait + 'ms' : '') + '</li>' +
-      (lastUpdate ? '<li><strong>Latest update:</strong> ' + escapePreviewHTML(lastUpdate) + '</li>' : '') +
-    '</ul>' +
-    '<details data-submit-attempt-raw-json style="margin-top:.45rem;">' +
-      '<summary>Raw JSON</summary>' +
-      '<pre data-submit-attempt-raw-json-body style="margin-top:.45rem;max-height:180px;overflow:auto;white-space:pre-wrap;">' + rawJSON + '</pre>' +
-    '</details>' +
-  '</div>';
+  '</details>';
 }
 
 function renderQueueStateCard(mode, running, queued, postSubmitRunning, attempts) {
@@ -3394,23 +3664,41 @@ function splitLiveAgentOutputForDisplay(raw) {
   };
 }
 
+function shouldStickScroll(el, threshold = 24) {
+  if (!el) return true;
+  return (el.scrollTop + el.clientHeight) >= (el.scrollHeight - threshold);
+}
+
+function restoreScrollPosition(el, previousTop, stickToBottom) {
+  if (!el) return;
+  if (stickToBottom) {
+    el.scrollTop = el.scrollHeight;
+    return;
+  }
+  el.scrollTop = Math.max(0, Math.min(previousTop, el.scrollHeight));
+}
+
 function renderLiveAgentOutput() {
   if (!liveSubmitLogEl) return;
   const split = splitLiveAgentOutputForDisplay(liveLogRawText);
+  const logShouldStick = shouldStickScroll(liveSubmitLogEl);
+  const logScrollTop = liveSubmitLogEl.scrollTop;
   liveSubmitLogEl.textContent = split.work || 'No live work log yet. Work activity appears here after the adapter starts writing logs.';
-  liveSubmitLogEl.scrollTop = liveSubmitLogEl.scrollHeight;
+  restoreScrollPosition(liveSubmitLogEl, logScrollTop, logShouldStick);
   if (liveSubmitCommentaryEl) {
+    const commentaryShouldStick = shouldStickScroll(liveSubmitCommentaryEl);
+    const commentaryScrollTop = liveSubmitCommentaryEl.scrollTop;
     liveSubmitCommentaryEl.textContent = split.commentary || 'No agent commentary yet. Plain-language progress updates appear here when the agent explains what it is doing.';
-    liveSubmitCommentaryEl.scrollTop = liveSubmitCommentaryEl.scrollHeight;
+    restoreScrollPosition(liveSubmitCommentaryEl, commentaryScrollTop, commentaryShouldStick);
   }
 }
 
 function activeSubmitAttemptForLog() {
   const runningAttempt = activeRunningSubmitAttempt();
-  if (runningAttempt && looksLikeLocalAttemptLogRef(attemptLogRef(runningAttempt))) return runningAttempt;
+  if (runningAttempt) return runningAttempt;
   if (liveLogAttemptId && liveLogCompletedForAttempt !== liveLogAttemptId) {
     const latestAttempt = findSubmitAttemptById(liveLogAttemptId);
-    if (latestAttempt && looksLikeLocalAttemptLogRef(attemptLogRef(latestAttempt))) return latestAttempt;
+    if (latestAttempt) return latestAttempt;
   }
   const attempts = Array.isArray(currentState?.submit_attempts) ? currentState.submit_attempts : [];
   const latestLoggedAttempt = attempts.find(a => {
@@ -3572,6 +3860,31 @@ async function cancelSubmitAttempt(attemptID) {
     showToast(submitAttemptToastMessage(data.attempt || attempt));
   } catch (err) {
     showToast('Could not stop request: ' + err.message, true);
+  }
+}
+
+async function rerunSubmitAttempt(attemptID) {
+  const id = String(attemptID || '').trim();
+  const attempt = findSubmitAttemptById(id);
+  if (!id || !attempt) return;
+  const destination = providerDestinationLabel(attempt.provider || 'agent');
+  if (!window.confirm('Rerun this request to ' + destination + ' with the current workspace and agent settings?')) return;
+  try {
+    const data = await post('/api/session/attempt/rerun', { attempt_id: id });
+    const rerunAttempt = data.attempt || null;
+    const rerunAttemptID = String(rerunAttempt?.attempt_id || data.attempt_id || '').trim();
+    currentState = currentState || {};
+    currentState.submit_queue = data.submit_queue_state || currentState.submit_queue;
+    currentState.submit_attempts = Array.isArray(data.submit_attempts) ? data.submit_attempts : currentState.submit_attempts;
+    if (rerunAttemptID) watchedSubmitAttemptIDs.add(rerunAttemptID);
+    notifySubmitAttemptTransitions(currentState.submit_attempts);
+    renderSubmitAttempts();
+    renderSubmitControls();
+    hydrateSubmitAttemptOutputs();
+    const intentLabel = String(rerunAttempt?.intent_label || attempt?.intent_label || 'Default request').trim();
+    showToast('Request re-queued to ' + destination + ' for "' + intentLabel + '"' + (rerunAttemptID ? (' as ' + rerunAttemptID) : '.'));
+  } catch (err) {
+    showToast('Could not rerun request: ' + err.message, true);
   }
 }
 
@@ -4073,6 +4386,8 @@ async function checkTranscriptionHealth() {
 }
 
 async function refresh() {
+  let rc = currentState?.runtime_codex || {};
+  let preservingRuntimeDraft = codexRuntimeDirty || codexRuntimeApplying;
   try {
     const res = await fetch('/api/state', { headers: authHeaders(false) });
     const txt = await res.text();
@@ -4097,9 +4412,6 @@ async function refresh() {
     syncAudioUIFromState();
     syncSTTRuntimeUIFromState();
     syncEnhancementUIFromState();
-    renderCaptureGuideStatus();
-    renderPlatformRuntimeStatus();
-    renderComposerSupportStatus();
     renderExtensionPairings();
     renderSessionTransportControls();
     renderSensitiveCaptureBadges();
@@ -4124,8 +4436,8 @@ async function refresh() {
         transcript_and_structured: '30 days'
       }
     }, null, 2);
-    const rc = currentState.runtime_codex || {};
-    const preservingRuntimeDraft = codexRuntimeDirty || codexRuntimeApplying;
+    rc = currentState.runtime_codex || {};
+    preservingRuntimeDraft = codexRuntimeDirty || codexRuntimeApplying;
     codexRuntimeStateEl.textContent = JSON.stringify(rc, null, 2);
     if (agentDefaultProviderEl && !preservingRuntimeDraft) agentDefaultProviderEl.value = rc.default_provider || agentDefaultProviderEl.value || 'codex_cli';
     if (videoModeEl) videoModeEl.value = currentState.video_mode || videoModeEl.value || 'event_triggered';
@@ -6509,6 +6821,7 @@ if (postSubmitTimeoutSecEl) {
 }
 
 setInterval(refresh, 1500);
+window.addEventListener('popstate', focusSubmitAttemptFromLocation);
 initPersistentSettings();
 syncDeliveryIntentPromptText(true);
 renderCaptureAgentNotice();

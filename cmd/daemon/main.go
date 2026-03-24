@@ -57,7 +57,15 @@ func startupBannerLines(cfg config.Config) []string {
 		"Welcome to Knit.",
 		"Version: " + startupVersion(cfg),
 		"Open the local UI: " + startupUIURL(cfg),
+		"Browser extension: Knit Browser Composer",
+		"Chrome Web Store: " + chromeWebStoreURL(),
+		"Local install: chrome://extensions -> Load unpacked -> extension/chromium",
+		"Pair from the UI: Capture, review, and send -> Chrome Extension",
 	}
+}
+
+func chromeWebStoreURL() string {
+	return "https://chromewebstore.google.com/detail/knit-browser-composer/aepollbmimigbaapeelemgmdkfnhaclb?authuser=0&hl=en"
 }
 
 func startupVersion(cfg config.Config) string {

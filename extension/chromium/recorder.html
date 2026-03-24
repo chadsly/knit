@@ -268,10 +268,26 @@
     .capture-state.ready {
       color: var(--accent);
     }
+    .video-guidance {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .video-guidance.hidden {
+      display: none;
+    }
+    .video-guidance.active {
+      color: var(--accent);
+    }
     .status {
       margin-top: 10px;
       color: var(--muted);
       white-space: pre-wrap;
+    }
+    .status.hidden {
+      display: none;
     }
     .status.error {
       color: var(--danger);
@@ -292,6 +308,51 @@
       color: var(--accent);
       white-space: pre-wrap;
     }
+    .notice.error {
+      border-color: rgba(185, 75, 75, 0.22);
+      background: rgba(185, 75, 75, 0.08);
+      color: var(--danger);
+    }
+    .queue-indicator {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .queue-indicator.hidden {
+      display: none;
+    }
+    .queue-table {
+      width: 100%;
+      margin-top: 6px;
+      border-collapse: separate;
+      border-spacing: 0 8px;
+      font-size: 11px;
+    }
+    .queue-table td {
+      padding: 0;
+      vertical-align: top;
+    }
+    .queue-table td:last-child {
+      text-align: right;
+      white-space: nowrap;
+      padding-left: 10px;
+    }
+    .queue-link {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+    .queue-link:hover,
+    .queue-link:focus-visible {
+      color: var(--accent);
+      outline: none;
+      text-decoration: underline;
+    }
     .preview {
       margin-top: 12px;
       max-height: 320px;
@@ -310,6 +371,16 @@
     }
     .preview-summary {
       margin-bottom: 10px;
+    }
+    .preview-warning-card {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(185, 75, 75, 0.2);
+      background: rgba(185, 75, 75, 0.06);
+    }
+    .preview-warning-card strong {
+      display: block;
     }
     .preview-note {
       margin-top: 12px;
@@ -357,6 +428,26 @@
       margin-top: 6px;
       color: var(--muted);
       white-space: pre-wrap;
+    }
+    .mini-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .mini-toolbar button {
+      min-height: 32px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--text);
+      font: inherit;
+    }
+    .mini-toolbar button.danger {
+      border-color: rgba(185, 75, 75, 0.24);
+      background: rgba(185, 75, 75, 0.08);
+      color: var(--danger);
     }
     .preview-media {
       margin-top: 10px;
@@ -450,7 +541,7 @@
             </div>
             <button id="themeToggleBtn" class="theme-toggle" title="Switch to dark theme" aria-label="Switch to dark theme">☾</button>
           </div>
-          <p class="helper">After pairing, use the extension side panel for this tab's notes, snapshots, audio, video, preview, and submit.</p>
+          <p id="headerHelper" class="helper hidden">Pair this browser from the popup first to connect it to the main Knit UI.</p>
         </div>
         <div class="header-status-row">
           <div id="sessionState" class="session-pill idle">Session idle</div>
@@ -504,11 +595,13 @@
       </div>
 
       <div id="captureState" class="capture-state hidden"></div>
+      <div id="videoGuidance" class="video-guidance hidden" aria-live="polite"></div>
       <div id="activityState" class="preview-loading activity-state hidden" aria-live="polite">
         <span class="preview-spinner" aria-hidden="true"></span>
         <span id="activityStateText">Working…</span>
       </div>
       <div id="submitNotice" class="notice hidden" aria-live="polite"></div>
+      <div id="queueIndicator" class="queue-indicator hidden" aria-live="polite"></div>
       <div id="status" class="status">Pair the extension from the popup first.</div>
       <div id="preview" class="preview"><div class="preview-empty">Preview updates here automatically as you capture notes, snapshots, audio, and video.</div></div>
       <video id="previewVideo" class="hidden" autoplay muted playsinline></video>
