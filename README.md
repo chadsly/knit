@@ -31,15 +31,38 @@ knit start
 ```
 Optional: Download un-archive and install/run from our release page
 
+### Install the browser extension
+
+If you want the browser-native capture flow, install `Knit Browser Composer` in one of these ways:
+
+- Chrome Web Store: [Knit Browser Composer](https://chromewebstore.google.com/detail/knit-browser-composer/aepollbmimigbaapeelemgmdkfnhaclb?authuser=0&hl=en)
+- Local unpacked install from this repo:
+  1. Open a Chromium-family browser such as Chrome, Brave, Edge, or Arc.
+  2. Go to `chrome://extensions`.
+  3. Turn on `Developer mode`.
+  4. Click `Load unpacked`.
+  5. Select `extension/chromium` from this repository.
+
+### Connect the extension to Knit
+
+1. Start the daemon with `knit start`.
+2. Open the local UI at `http://127.0.0.1:7777`.
+3. Start a review session.
+4. In `Capture, review, and send`, choose `Chrome Extension` and click `Generate extension token`.
+5. Copy the one-time code shown in the Knit UI.
+6. Open the extension popup, paste the code, and pair it with the local daemon.
+7. Reopen the popup and launch the browser composer side panel for the tab you are reviewing.
+
 ### Basic Session Flow
 
 1. Start the daemon (e.g. knit start).
 2. Open the local UI at `http://127.0.0.1:7777`.
 3. Start a review session and select your workspace (where your code lives).
-4. Capture feedback from the main UI, floating composer, or browser extension.
-5. Choose what the agent should do with the approved feedback.
-6. Preview the structured request.
-7. Approve and submit it to your configured adapter. You can watch the 'Queue and delivery" on the Main UI for your update to finish or just go queue another one
+4. If you want browser-native capture, pair the Chrome extension from `Capture, review, and send -> Chrome Extension`.
+5. Capture feedback from the main UI, floating composer, or browser extension.
+6. Choose what the agent should do with the approved feedback.
+7. Preview the structured request.
+8. Approve and submit it to your configured adapter. You can watch the `Queue and delivery` panel in the main UI for your update to finish or just go queue another one.
 
 ## The Problem
 
@@ -232,6 +255,26 @@ knit start
 python3 -m pip install chadsly-knit
 knit start
 ```
+
+### Install And Connect The Browser Extension
+
+For the browser-native side panel flow, install `Knit Browser Composer` after the daemon is running:
+
+- Chrome Web Store: [Knit Browser Composer](https://chromewebstore.google.com/detail/knit-browser-composer/aepollbmimigbaapeelemgmdkfnhaclb?authuser=0&hl=en)
+- Local unpacked install:
+  1. Open `chrome://extensions` in Chrome, Brave, Edge, Arc, or another Chromium-family browser.
+  2. Turn on `Developer mode`.
+  3. Click `Load unpacked`.
+  4. Select `extension/chromium` from this repository.
+
+Then pair it to the local Knit daemon:
+
+1. Open the local UI at `http://127.0.0.1:7777`.
+2. Start a review session.
+3. In `Capture, review, and send`, choose `Chrome Extension`.
+4. Click `Generate extension token` and copy the one-time code.
+5. Open the extension popup and paste that code to pair.
+6. Use the popup to open the browser composer side panel for the current tab.
 
 ### Run With The Tray
 
