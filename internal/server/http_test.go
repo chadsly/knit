@@ -508,8 +508,8 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, `id="captureOptionExtension"`) || !strings.Contains(body, `>Easy<`) || !strings.Contains(body, `Chrome Extension`) {
 		t.Fatalf("expected step 2 to render the easy Chrome Extension path")
 	}
-	if !strings.Contains(body, `onclick="openDocsBrowser('getting_started.md')"`) || !strings.Contains(body, `>Install guide</span>`) {
-		t.Fatalf("expected Chrome Extension option card to link directly to the extension install guide")
+	if strings.Contains(body, `>Install guide</span>`) || strings.Contains(body, `onclick="openDocsBrowser('getting_started.md')"`) {
+		t.Fatalf("did not expect the Chrome Extension option card to render a dedicated install-guide button now that docs live in the shared action row")
 	}
 	if !strings.Contains(body, `id="captureOptionComposer"`) || !strings.Contains(body, `>Intermediate<`) || !strings.Contains(body, `Popout Composer`) || !strings.Contains(body, `Open popout composer`) {
 		t.Fatalf("expected step 2 to render the intermediate popout composer path")
