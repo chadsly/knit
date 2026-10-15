@@ -31,6 +31,11 @@ knit start
 ```
 Optional: Download un-archive and install/run from our release page
 
+Knit has two additive execution modes:
+
+- `direct_exec` (default): the current flow. The extension or main UI submits and the daemon immediately starts the coding-agent adapter.
+- `mcp_worker`: requests stay queued in the daemon until a long-running worker connected through `knit mcp` claims them.
+
 ### Install the browser extension
 
 If you want the browser-native capture flow, install `Knit Browser Composer` in one of these ways:
@@ -48,10 +53,30 @@ If you want the browser-native capture flow, install `Knit Browser Composer` in 
 1. Start the daemon with `knit start`.
 2. Open the local UI at `http://127.0.0.1:7777`.
 3. Start a review session.
-4. In `Capture, review, and send`, choose `Chrome Extension` and click `Generate extension token`.
-5. Copy the one-time code shown in the Knit UI.
-6. Open the extension popup, paste the code, and pair it with the local daemon.
+4. In `Capture, review, and send`, choose `Chrome Extension`.
+5. Pair in one of these ways:
+   - click `Generate pairing code`, then paste the one-time pairing code into the extension popup
+   - or run `knit mcp` and paste the managed browser token that Knit prints to `stderr`
+6. Open the extension popup, paste the code or token, and pair it with the local daemon.
 7. Reopen the popup and launch the browser composer side panel for the tab you are reviewing.
+
+### Run Knit as an MCP worker bridge
+
+If you want Codex to consume queued Knit requests through MCP instead of the daemon immediately launching the adapter:
+
+```bash
+knit mcp
+```
+
+What `knit mcp` does:
+
+- ensures the local Knit daemon is running
+- starts in `mcp_worker` mode for that managed daemon process
+- prints the current managed Chrome extension token to `stderr`
+- keeps the daemon as the source of truth for queue state, worker state, and extension auth
+- expects the Codex worker session to call `register_worker` before it waits for or claims requests
+
+If `knit mcp` attached to an existing daemon, it reuses the existing managed browser token instead of rotating it. The main UI also exposes the same token in `Capture, review, and send -> Chrome Extension`, where you can copy it again later. `knit mcp` only attaches to a compatible MCP-managed daemon instance; it fails clearly instead of silently mutating a normal daemon instance.
 
 ### Basic Session Flow
 
@@ -62,7 +87,7 @@ If you want the browser-native capture flow, install `Knit Browser Composer` in 
 5. Capture feedback from the main UI, floating composer, or browser extension.
 6. Choose what the agent should do with the approved feedback.
 7. Preview the structured request.
-8. Approve and submit it to your configured adapter. You can watch the `Queue and delivery` panel in the main UI for your update to finish or just go queue another one.
+8. Approve and submit it. In `direct_exec` mode the daemon immediately launches the adapter. In `mcp_worker` mode the request stays queued until a connected worker claims it. You can watch the `Queue and delivery` panel in the main UI for the current mode, worker connectivity, and request progress.
 
 ## The Problem
 
@@ -272,7 +297,7 @@ Then pair it to the local Knit daemon:
 1. Open the local UI at `http://127.0.0.1:7777`.
 2. Start a review session.
 3. In `Capture, review, and send`, choose `Chrome Extension`.
-4. Click `Generate extension token` and copy the one-time code.
+4. Click `Generate pairing code` and copy the one-time code.
 5. Open the extension popup and paste that code to pair.
 6. Use the popup to open the browser composer side panel for the current tab.
 

@@ -375,6 +375,9 @@ func TestChromiumExtensionPopupIsCompactAndAccessible(t *testing.T) {
 	if !strings.Contains(html, `id="openComposerBtn" class="primary"`) {
 		t.Fatalf("expected popup launcher button for the side panel composer")
 	}
+	if !strings.Contains(html, `Pairing code or managed token`) || !strings.Contains(html, `<code>knit mcp</code>`) {
+		t.Fatalf("expected popup to explain managed token pairing from knit mcp")
+	}
 	if !strings.Contains(html, `Capture, preview, and submit from the extension side panel after pairing.`) {
 		t.Fatalf("expected popup copy to direct users into the side panel")
 	}
@@ -400,6 +403,9 @@ func TestChromiumExtensionPopupJSIncludesCaptureFlows(t *testing.T) {
 		`windowId: tab.windowId`,
 		`chrome.sidePanel.open({ tabId: tab.id })`,
 		`/api/extension/pair/complete`,
+		`Enter the pairing code or managed token from Knit first.`,
+		`Enter the pairing code or managed token from Knit to connect this browser.`,
+		`await request("/api/extension/session", { headers: authHeaders(false) });`,
 		`Extension paired. Opening the browser composer in the side panel.`,
 		`type: "knit:consume-submit-notice"`,
 		`The browser composer opened in the extension side panel for this tab.`,
@@ -530,9 +536,15 @@ func TestChromiumExtensionRecorderIncludesCaptureFlows(t *testing.T) {
 		`function renderQueueIndicator()`,
 		`function queueAttemptStatusLabel(attempt)`,
 		`function queueAttemptTitle(attempt)`,
+		`const warnings = Array.isArray(queue?.warnings) ? queue.warnings : [];`,
+		`No compatible worker is connected. Queued requests will wait.`,
+		`attempt?.state_code`,
+		`attempt?.state_message`,
+		`Queued for worker via`,
 		`request_preview`,
 		`case "submitted":`,
 		`return "completed";`,
+		`return "claimed";`,
 		`.slice(0, 5);`,
 		`data-attempt-link=`,
 		`<table class="queue-table"><tbody>`,
@@ -611,6 +623,68 @@ func TestChromiumExtensionRecorderIncludesCaptureFlows(t *testing.T) {
 		if strings.Contains(script, fragment) {
 			t.Fatalf("did not expect recorder script fragment %s", fragment)
 		}
+	}
+}
+
+func TestNPMPackageWrapperSupportsMCPMode(t *testing.T) {
+	raw, err := os.ReadFile("../packaging/npm/knit-daemon/bin/knit-daemon.js")
+	if err != nil {
+		t.Fatalf("read npm wrapper: %v", err)
+	}
+	script := string(raw)
+	required := []string{
+		`Usage: knit <start|mcp|path|version> [args...]`,
+		`if (command !== "start" && command !== "mcp") {`,
+		`const args = command === "mcp" ? process.argv.slice(2) : process.argv.slice(3);`,
+	}
+	for _, fragment := range required {
+		if !strings.Contains(script, fragment) {
+			t.Fatalf("expected npm wrapper fragment %q", fragment)
+		}
+	}
+}
+
+func TestMCPDocsExplainWorkerModeAndManagedToken(t *testing.T) {
+	readmeRaw, err := os.ReadFile("../README.md")
+	if err != nil {
+		t.Fatalf("read README: %v", err)
+	}
+	readme := string(readmeRaw)
+	readmeRequired := []string{
+		"`mcp_worker`",
+		"`knit mcp`",
+		"managed browser token",
+		"Queue and delivery",
+	}
+	for _, fragment := range readmeRequired {
+		if !strings.Contains(readme, fragment) {
+			t.Fatalf("expected README fragment %q", fragment)
+		}
+	}
+
+	gettingStartedRaw, err := os.ReadFile("../docs/GETTING_STARTED.md")
+	if err != nil {
+		t.Fatalf("read GETTING_STARTED: %v", err)
+	}
+	gettingStarted := string(gettingStartedRaw)
+	gettingStartedRequired := []string{
+		"Chrome Web Store",
+		"Pair it from MCP mode:",
+		"`knit mcp`",
+		"managed browser token",
+	}
+	for _, fragment := range gettingStartedRequired {
+		if !strings.Contains(gettingStarted, fragment) {
+			t.Fatalf("expected GETTING_STARTED fragment %q", fragment)
+		}
+	}
+
+	configExampleRaw, err := os.ReadFile("../knit.toml.example")
+	if err != nil {
+		t.Fatalf("read knit.toml.example: %v", err)
+	}
+	if !strings.Contains(string(configExampleRaw), `# default_execution_mode = "direct_exec"`) {
+		t.Fatalf("expected knit.toml.example to document default_execution_mode")
 	}
 }
 

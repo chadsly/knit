@@ -979,6 +979,13 @@ const floatingComposerHTML = `<!doctype html>
             <option value="opencode_cli">opencode_cli</option>
           </select>
         </label>
+        <label class="field">
+          <span class="field-label">Default execution mode</span>
+          <select id="fcDefaultExecutionMode" style="min-width:220px;">
+            <option value="direct_exec">direct_exec</option>
+            <option value="mcp_worker">mcp_worker</option>
+          </select>
+        </label>
       </div>
       <div id="fcRuntimeProviderHelp" class="runtime-inline-note">Knit will show only the fields used by the selected adapter.</div>
 
@@ -1283,6 +1290,7 @@ const fcSttTimeoutWrapEl = document.getElementById('fcSttTimeoutWrap');
 const fcSttHealthStateEl = document.getElementById('fcSttHealthState');
 const fcSttRuntimeStateEl = document.getElementById('fcSttRuntimeState');
 const fcAgentDefaultProviderEl = document.getElementById('fcAgentDefaultProvider');
+const fcDefaultExecutionModeEl = document.getElementById('fcDefaultExecutionMode');
 const fcRuntimeProviderHelpEl = document.getElementById('fcRuntimeProviderHelp');
 const fcCodexCliSectionEl = document.getElementById('fcCodexCliSection');
 const fcClaudeCliSectionEl = document.getElementById('fcClaudeCliSection');
@@ -1466,6 +1474,7 @@ function initFCPersistentSettings() {
   applyThemeFC(normalizeThemeFC(fcSettings.theme || 'light'));
   bindFCPersistedField(fcWorkspaceDirEl, 'workspace_dir');
   bindFCPersistedField(fcAgentDefaultProviderEl, 'default_provider');
+  bindFCPersistedField(fcDefaultExecutionModeEl, 'default_execution_mode');
   bindFCPersistedField(fcCodexCliCmdEl, 'cli_adapter_cmd');
   bindFCPersistedField(fcClaudeCliCmdEl, 'claude_cli_adapter_cmd');
   bindFCPersistedField(fcOpenCodeCliCmdEl, 'opencode_cli_adapter_cmd');
@@ -1563,15 +1572,15 @@ function submitAttemptToastMessageFC(attempt) {
 }
 
 function submitAttemptOutcomeTitleFC(attempt) {
-  return String(attempt?.outcome_title || '').trim();
+  return String(attempt?.outcome_title || attempt?.state_code || '').trim();
 }
 
 function submitAttemptOutcomeMessageFC(attempt) {
-  return String(attempt?.outcome_message || '').trim();
+  return String(attempt?.outcome_message || attempt?.state_message || '').trim();
 }
 
 function submitAttemptNeedsAttentionFC(attempt) {
-  return String(attempt?.outcome_code || '').trim().length > 0;
+  return String(attempt?.outcome_code || attempt?.state_code || '').trim().length > 0;
 }
 
 function submitAttemptOutcomeToastMessageFC(attempt) {
@@ -2092,6 +2101,7 @@ async function applyWorkspaceFC() {
     const rc = lastState?.runtime_codex || {};
     const payload = {
       default_provider: String(fcAgentDefaultProviderEl?.value || rc.default_provider || 'codex_cli'),
+      default_execution_mode: String(fcDefaultExecutionModeEl?.value || rc.default_execution_mode || 'direct_exec'),
       cli_adapter_cmd: String((fcCodexCliCmdEl?.value || rc.cli_adapter_cmd || '')).trim(),
       claude_cli_adapter_cmd: String((fcClaudeCliCmdEl?.value || rc.claude_cli_adapter_cmd || '')).trim(),
       opencode_cli_adapter_cmd: String((fcOpenCodeCliCmdEl?.value || rc.opencode_cli_adapter_cmd || '')).trim(),
@@ -2576,6 +2586,7 @@ function syncFCCodexRuntimeUI(data) {
   const preservingRuntimeDraft = fcCodexRuntimeDirty || fcCodexRuntimeApplying;
   if (fcCodexRuntimeStateEl) fcCodexRuntimeStateEl.textContent = JSON.stringify(rc, null, 2);
   if (fcAgentDefaultProviderEl && !preservingRuntimeDraft) fcAgentDefaultProviderEl.value = rc.default_provider || fcAgentDefaultProviderEl.value || 'codex_cli';
+  if (fcDefaultExecutionModeEl && !preservingRuntimeDraft) fcDefaultExecutionModeEl.value = rc.default_execution_mode || fcDefaultExecutionModeEl.value || 'direct_exec';
   if (fcCodexCliCmdEl && !preservingRuntimeDraft) fcCodexCliCmdEl.value = rc.cli_adapter_cmd || fcCodexCliCmdEl.value || '';
   if (fcClaudeCliCmdEl && !preservingRuntimeDraft) fcClaudeCliCmdEl.value = rc.claude_cli_adapter_cmd || fcClaudeCliCmdEl.value || '';
   if (fcOpenCodeCliCmdEl && !preservingRuntimeDraft) fcOpenCodeCliCmdEl.value = rc.opencode_cli_adapter_cmd || fcOpenCodeCliCmdEl.value || '';
@@ -2651,6 +2662,7 @@ async function applyCodexRuntimeFC() {
     const deliveryPromptPayload = currentDeliveryPromptPayloadFC();
     const payload = {
       default_provider: selectedProviderFC(),
+      default_execution_mode: String(fcDefaultExecutionModeEl?.value || 'direct_exec'),
       cli_adapter_cmd: readRuntimeSingleLineFC(fcCodexCliCmdEl, 'Codex CLI command'),
       cli_timeout_seconds: timeoutSeconds,
       claude_cli_adapter_cmd: readRuntimeSingleLineFC(fcClaudeCliCmdEl, 'Claude CLI command'),
@@ -2688,6 +2700,7 @@ async function applyCodexRuntimeFC() {
     syncFCCodexRuntimeUI({ runtime_codex: res.runtime_codex || payload });
     if (fcCodexWorkdirLabelEl) fcCodexWorkdirLabelEl.textContent = payload.codex_workdir || '(not set)';
     setFCSetting('default_provider', payload.default_provider || '');
+    setFCSetting('default_execution_mode', payload.default_execution_mode || 'direct_exec');
     setFCSetting('cli_adapter_cmd', payload.cli_adapter_cmd || '');
     setFCSetting('claude_cli_adapter_cmd', payload.claude_cli_adapter_cmd || '');
     setFCSetting('opencode_cli_adapter_cmd', payload.opencode_cli_adapter_cmd || '');
@@ -3283,6 +3296,9 @@ function submitAttemptOutputTextFC(attempt) {
   }
   const error = String(attempt.error || '').trim();
   if (error) return 'Error: ' + error;
+  const status = String(attempt.status || '').trim();
+  const stateMessage = String(attempt.state_message || '').trim();
+  if (stateMessage && status !== 'in_progress') return stateMessage;
   const note = String(attempt.note || '').trim();
   if (note) return note;
   if (looksLikeLocalAttemptLogRefFC(attemptLogRefFC(attempt))) return 'Loading adapter output...';
@@ -3546,15 +3562,50 @@ async function refreshState() {
     const feedbackCount = feedback.length;
     const queue = data?.submit_queue || {};
     const queueMode = String(queue.mode || 'series');
+    const defaultExecutionMode = String(queue.default_execution_mode || data?.runtime_codex?.default_execution_mode || 'direct_exec');
     const queueRunning = Number(queue.running || 0);
     const queueQueued = Number(queue.queued || 0);
+    const workerState = queue?.worker_connectivity || {};
+    const workerConnected = Number(workerState.connected || 0);
+    const workerOnline = Number(workerState.online || workerConnected || 0);
+    const workerBusy = Number(workerState.busy || 0);
+    const workerIdle = Number(workerState.idle || 0);
+    const workerStale = Number(workerState.stale || 0);
+    const workerOffline = Number(workerState.offline || 0);
+    const workerProviders = Array.isArray(workerState.providers) ? workerState.providers : [];
+    const workerQueued = Number(queue.mcp_worker_queued || 0);
+    const workerClaimed = Number(queue.mcp_worker_claimed || 0);
+    const queueWarnings = Array.isArray(queue.warnings) ? queue.warnings : [];
     const postSubmitRunning = !!queue.post_submit_running;
     const sessionLabel = sessionID === 'none' ? 'No session' : ('S ' + String(sessionID).slice(0, 8));
     setStatusChipFC(stateLineEl, 'Session', sessionLabel + ' • ' + feedbackCount + ' notes • ' + capture + (approved ? ' • ready' : ''), sessionID === 'none' ? 'warn' : '');
     stateLineEl.title = 'Session ' + sessionID + ' | capture ' + capture + ' | notes ' + feedbackCount + (approved ? ' | ready to send' : '');
     if (queueLineEl) {
-      setStatusChipFC(queueLineEl, 'Queue', queueMode + ' • ' + queueRunning + ' running • ' + queueQueued + ' waiting' + (postSubmitRunning ? ' • rebuild/check running' : ''), (queueRunning > 0 || queueQueued > 0) ? 'ok' : '');
-      queueLineEl.title = 'Queue: ' + queueRunning + ' running | ' + queueQueued + ' waiting | mode ' + queueMode + (postSubmitRunning ? ' | rebuild/check running' : '');
+      let queueSummary = defaultExecutionMode + ' • ' + queueRunning + ' running • ' + queueQueued + ' waiting';
+      if (defaultExecutionMode === 'mcp_worker') {
+        if (queueWarnings.length) {
+          queueSummary += ' • waiting on worker';
+        } else if (workerBusy > 0) {
+          queueSummary += ' • worker busy';
+        } else if (workerIdle > 0) {
+          queueSummary += ' • worker idle';
+        } else if (workerQueued > 0) {
+          queueSummary += ' • waiting for claim';
+        }
+      }
+      const queueTone = queueWarnings.length ? 'warn' : ((queueRunning > 0 || queueQueued > 0) ? 'ok' : '');
+      setStatusChipFC(queueLineEl, 'Queue', queueSummary + (postSubmitRunning ? ' • rebuild/check running' : ''), queueTone);
+      queueLineEl.title = 'Queue: ' + queueRunning + ' running | ' + queueQueued + ' waiting | default exec ' + defaultExecutionMode +
+        ' | submit mode ' + queueMode +
+        ' | worker claimed ' + workerClaimed +
+        ' | workers online ' + workerOnline +
+        ' busy ' + workerBusy +
+        ' idle ' + workerIdle +
+        ' stale ' + workerStale +
+        ' offline ' + workerOffline +
+        (workerProviders.length ? ' | providers ' + workerProviders.join(', ') : '') +
+        (queueWarnings.length ? ' | warning ' + String(queueWarnings[0]?.message || '') : '') +
+        (postSubmitRunning ? ' | rebuild/check running' : '');
     }
     notifySubmitAttemptTransitionsFC(Array.isArray(data?.submit_attempts) ? data.submit_attempts : []);
     notifySubmitRecoveryNoticesFC(data?.submit_recovery_notices);
@@ -4896,7 +4947,8 @@ async function submitSessionFC() {
     const destination = providerDestinationLabelFC(provider);
     setPreviewState('Sent to ' + destination + ' for "' + intentLabel + '". ' + (attemptID || 'Submission queued') + (queuePos > 0 ? (' • queue position ' + queuePos) : ''));
     setStatus('Submission queued: ' + (attemptID || 'attempt') + ' (' + status + ').');
-    showToastFC('Request submitted to ' + destination + ' for "' + intentLabel + '"' + (attemptID ? (' as ' + attemptID) : '.'));
+    const executionMode = String(data.execution_mode || '').trim();
+    showToastFC((executionMode === 'mcp_worker' ? 'Request queued for worker via ' : 'Request submitted to ') + destination + ' for "' + intentLabel + '"' + (attemptID ? (' as ' + attemptID) : '.'));
     await refreshState();
   } catch (err) {
     const msg = String(err.message || '');
@@ -5070,6 +5122,9 @@ if (fcCodexOutputDirEl) {
 }
 if (fcSubmitExecutionModeEl) {
   fcSubmitExecutionModeEl.addEventListener('change', scheduleCodexRuntimeApplyFC);
+}
+if (fcDefaultExecutionModeEl) {
+  fcDefaultExecutionModeEl.addEventListener('change', scheduleCodexRuntimeApplyFC);
 }
 if (fcCodexSandboxEl) {
   fcCodexSandboxEl.addEventListener('change', scheduleCodexRuntimeApplyFC);

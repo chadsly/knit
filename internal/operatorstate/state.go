@@ -29,6 +29,7 @@ type System struct {
 
 type RuntimeCodex struct {
 	DefaultProvider         string `json:"default_provider,omitempty"`
+	DefaultExecutionMode    string `json:"default_execution_mode,omitempty"`
 	CLIAdapterCmd           string `json:"cli_adapter_cmd,omitempty"`
 	CLITimeoutSeconds       int    `json:"cli_timeout_seconds,omitempty"`
 	ClaudeCLIAdapterCmd     string `json:"claude_cli_adapter_cmd,omitempty"`
@@ -91,6 +92,8 @@ type ExtensionPairing struct {
 	Platform     string     `json:"platform,omitempty"`
 	Capabilities []string   `json:"capabilities,omitempty"`
 	TokenHash    string     `json:"token_hash,omitempty"`
+	RawToken     string     `json:"raw_token,omitempty"`
+	TokenSource  string     `json:"token_source,omitempty"`
 	CreatedAt    time.Time  `json:"created_at,omitempty"`
 	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`
 	RevokedAt    *time.Time `json:"revoked_at,omitempty"`
@@ -101,7 +104,18 @@ const (
 	DefaultLocalCodingApproval   = "never"
 	DefaultDeliveryIntentProfile = agents.IntentImplementChanges
 	DefaultCheckUpdatesOnStartup = true
+	DefaultExecutionModeDirect   = "direct_exec"
+	DefaultExecutionModeWorker   = "mcp_worker"
 )
+
+func NormalizeExecutionMode(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case DefaultExecutionModeWorker:
+		return DefaultExecutionModeWorker
+	default:
+		return DefaultExecutionModeDirect
+	}
+}
 
 func NormalizeRuntimeCodexDefaults(state RuntimeCodex) RuntimeCodex {
 	if strings.TrimSpace(state.CodexSandbox) == "" {
@@ -113,6 +127,7 @@ func NormalizeRuntimeCodexDefaults(state RuntimeCodex) RuntimeCodex {
 	if strings.TrimSpace(state.DefaultProvider) == "" {
 		state.DefaultProvider = "codex_cli"
 	}
+	state.DefaultExecutionMode = NormalizeExecutionMode(state.DefaultExecutionMode)
 	if strings.TrimSpace(state.CLIAdapterCmd) == "" {
 		state.CLIAdapterCmd = defaultBundledCLIAdapterCommand("knit-codex-cli-adapter.sh")
 	}
@@ -207,6 +222,7 @@ func Capture(cfg config.Config, audioState audio.State) State {
 		},
 		RuntimeCodex: NormalizeRuntimeCodexDefaults(RuntimeCodex{
 			DefaultProvider:         strings.TrimSpace(os.Getenv("KNIT_DEFAULT_PROVIDER")),
+			DefaultExecutionMode:    strings.TrimSpace(os.Getenv("KNIT_DEFAULT_EXECUTION_MODE")),
 			CLIAdapterCmd:           strings.TrimSpace(os.Getenv("KNIT_CLI_ADAPTER_CMD")),
 			CLITimeoutSeconds:       readEnvInt("KNIT_CLI_TIMEOUT_SECONDS"),
 			ClaudeCLIAdapterCmd:     strings.TrimSpace(os.Getenv("KNIT_CLAUDE_CLI_ADAPTER_CMD")),

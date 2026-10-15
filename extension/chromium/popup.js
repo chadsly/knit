@@ -106,7 +106,7 @@ async function refreshConnectionStatus() {
   renderPopupState();
   if (!config.daemonToken) {
     setSubmitNotice("");
-    setStatus("Enter the pairing code from the main Knit UI to connect this browser.");
+    setStatus("Enter the pairing code or managed token from Knit to connect this browser.");
     return;
   }
   try {
@@ -119,29 +119,31 @@ async function refreshConnectionStatus() {
 
 async function pairExtension() {
   const daemonBaseURL = String(daemonBaseURLEl.value || "").trim() || "http://127.0.0.1:7777";
-  const pairingCode = String(pairingCodeEl.value || "").trim().toUpperCase();
-  if (!pairingCode) {
-    setStatus("Enter the pairing code from the main Knit UI first.", true);
+  const pairingInput = String(pairingCodeEl.value || "").trim();
+  if (!pairingInput) {
+    setStatus("Enter the pairing code or managed token from Knit first.", true);
     return;
   }
   requestInFlight = true;
   renderPopupState();
   try {
     await saveConfig({ daemonBaseURL });
-    const data = await request("/api/extension/pair/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pairing_code: pairingCode,
-        name: "Chromium Side Panel",
-        browser: "chromium",
-        platform: navigator.platform || "unknown"
-      })
-    });
-    await saveConfig({
-      daemonBaseURL,
-      daemonToken: String(data?.token || "").trim()
-    });
+    let daemonToken = pairingInput;
+    if (!/[._-]/.test(pairingInput) && pairingInput.length <= 16) {
+      const data = await request("/api/extension/pair/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pairing_code: pairingInput.toUpperCase(),
+          name: "Chromium Side Panel",
+          browser: "chromium",
+          platform: navigator.platform || "unknown"
+        })
+      });
+      daemonToken = String(data?.token || "").trim();
+    }
+    await saveConfig({ daemonBaseURL, daemonToken });
+    await request("/api/extension/session", { headers: authHeaders(false) });
     pairingCodeEl.value = "";
     await consumeSubmitNotice();
     await refreshConnectionStatus();

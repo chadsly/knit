@@ -217,7 +217,7 @@ Install it first:
 5. Select the repo folder at `extension/chromium`.
 6. Pin the extension if you want the popup to stay easy to reach while reviewing pages.
 
-The extension assets ship in-repo under `extension/chromium/`, so there is no separate store install flow in this tree right now.
+You can install `Knit Browser Composer` from the [Chrome Web Store](https://chromewebstore.google.com/detail/knit-browser-composer/aepollbmimigbaapeelemgmdkfnhaclb?authuser=0&hl=en) or load `extension/chromium/` locally from this repo.
 
 Use it when:
 
@@ -227,25 +227,39 @@ Use it when:
 
 Pair it from the main UI:
 
-1. On the main page in `Capture, review, and send`, use the `Chrome Extension` option and click `Generate extension token`.
+1. On the main page in `Capture, review, and send`, use the `Chrome Extension` option and click `Generate pairing code`.
 2. Copy the one-time code shown right under that button before it expires.
 3. Open the Chromium extension popup and enter that code.
 4. Use `Settings -> Browser Extension` to confirm the popup is paired or revoke it later.
 
-The pairing happens in two steps:
+Pair it from MCP mode:
 
-- the main UI generates a short-lived pairing code
-- the extension exchanges that code for its own scoped browser token tied to the local daemon
+1. Start the MCP bridge with `knit mcp`.
+2. Knit ensures the daemon is running and prints the managed browser token to `stderr`.
+3. Paste that managed token into the Chromium extension popup.
+4. The popup verifies the token against the same local daemon and opens the side-panel composer.
+5. Register your Codex worker session through the MCP bridge before calling `wait_for_request` or `claim_request`.
+
+The pairing can happen in two ways:
+
+- main UI pairing code:
+  - the main UI generates a short-lived pairing code
+  - the extension exchanges that code for its own scoped browser token tied to the local daemon
+- MCP managed token:
+  - `knit mcp` reuses or creates a daemon-owned managed browser token
+  - the extension stores that token directly and uses it against the same daemon
+  - the MCP bridge only attaches to a compatible MCP-managed daemon instance; otherwise it fails with a clear incompatibility error
 
 ![Main UI Browser Extension section with Generate pairing code and the active code shown](/docs/assets/browser-extension-pairing-code.png)
 
 ![Chromium extension popup showing the daemon URL and pairing code fields before clicking Pair extension](/docs/assets/extension-popup-pairing-compact.png)
 
-Important: the extension does not use the main UI control token directly during normal use. After pairing, it stores a separate browser token returned by the daemon.
+Important: the extension does not use the main UI control token directly during normal use. It always stores a scoped browser token owned and validated by the daemon.
 
 What the pairing gives you:
 
 - the extension gets a scoped browser token tied to the local daemon
+- in `mcp_worker` mode, submitted requests stay queued until a compatible worker claims them through MCP
 - after pairing, the popup becomes a thin launcher for the extension side panel
 - the full browser composer lives in the side panel for the tab you opened it on: type notes, queue snapshots, record audio, record tab video, preview, and submit against the active main-UI session
 - runtime configuration stays in the main UI; the extension remains focused on browser-review capture instead of full daemon administration
@@ -277,6 +291,7 @@ Audio and video capture in the side panel:
 If the extension is already paired but not behaving correctly:
 
 - regenerate the pairing code and pair again if the old token was revoked
+- if you are using `knit mcp`, copy the managed browser token again from the MCP startup banner or from the main UI `Chrome Extension` panel
 - check that the daemon is still the same one the extension was paired to
 - reopen the side panel from the exact tab you are reviewing if you switched away and want the tab-bound composer again
 - confirm the current review session is active in the main Knit UI before trying to capture or submit from the side panel

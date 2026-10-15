@@ -108,7 +108,7 @@ func (s *Server) handleVoiceCommand(curr *session.Session, rawTranscript string)
 		if err != nil {
 			return true, nil, err
 		}
-		attempt := s.enqueueSubmitJob(provider, redactedPkg, providerPayload, intent, "voice_command", "local_operator")
+		attempt := s.enqueueSubmitJob(provider, redactedPkg, "", providerPayload, intent, "voice_command", "local_operator")
 		response["provider"] = provider
 		response["attempt_id"] = attempt.AttemptID
 		response["submit_queue_state"] = s.submitQueueState()

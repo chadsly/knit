@@ -23,6 +23,7 @@ const (
 	uiRuntimeComment            = "allowed today: native_tray_plus_local_web_ui"
 	videoModesComment           = "allowed: event_triggered, on_demand, continuous"
 	submitProvidersComment      = "choose from: codex_cli, claude_cli, opencode_cli, codex_api, claude_api"
+	executionModesComment       = "allowed: direct_exec, mcp_worker"
 	submitExecutionModesComment = "allowed: series, parallel"
 	codexSandboxComment         = "allowed: read-only, workspace-write, danger-full-access"
 	codexApprovalComment        = "allowed: untrusted, on-request, never"
@@ -45,6 +46,7 @@ type systemSection struct {
 
 type runtimeCodexSection struct {
 	DefaultProvider         string `toml:"default_provider,omitempty"`
+	DefaultExecutionMode    string `toml:"default_execution_mode,omitempty"`
 	CLIAdapterCmd           string `toml:"cli_adapter_cmd,omitempty"`
 	CLITimeoutSeconds       int    `toml:"cli_timeout_seconds,omitempty"`
 	ClaudeCLIAdapterCmd     string `toml:"claude_cli_adapter_cmd,omitempty"`
@@ -182,6 +184,7 @@ func applyRuntimeCodexSection(dst *operatorstate.RuntimeCodex, src runtimeCodexS
 		return
 	}
 	dst.DefaultProvider = strings.TrimSpace(src.DefaultProvider)
+	dst.DefaultExecutionMode = operatorstate.NormalizeExecutionMode(src.DefaultExecutionMode)
 	dst.CLIAdapterCmd = strings.TrimSpace(src.CLIAdapterCmd)
 	dst.CLITimeoutSeconds = src.CLITimeoutSeconds
 	dst.ClaudeCLIAdapterCmd = strings.TrimSpace(src.ClaudeCLIAdapterCmd)
@@ -309,6 +312,7 @@ func renderFile(cfg config.Config, state operatorstate.State) string {
 
 	writeSectionHeader(&b, "runtime_codex")
 	writeString(&b, "default_provider", rc.DefaultProvider, "codex_cli", submitProvidersComment)
+	writeString(&b, "default_execution_mode", rc.DefaultExecutionMode, operatorstate.DefaultExecutionModeDirect, executionModesComment)
 	writeString(&b, "cli_adapter_cmd", rc.CLIAdapterCmd, "", "")
 	writeInt(&b, "cli_timeout_seconds", rc.CLITimeoutSeconds, 600, "")
 	writeString(&b, "claude_cli_adapter_cmd", rc.ClaudeCLIAdapterCmd, "", "")

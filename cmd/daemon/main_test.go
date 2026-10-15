@@ -1,6 +1,9 @@
 package main
 
 import (
+	"io"
+	"os"
+	"strings"
 	"testing"
 
 	"knit/internal/config"
@@ -56,5 +59,75 @@ func TestStartupVersionFallsBackToVersionPinThenDev(t *testing.T) {
 	cfg.VersionPin = ""
 	if got := startupVersion(cfg); got != "dev" {
 		t.Fatalf("expected dev fallback, got %q", got)
+	}
+}
+
+func TestMCPStartupBannerWritesManagedTokenToStderrOnly(t *testing.T) {
+	cfg := config.Default()
+	cfg.HTTPListenAddr = "127.0.0.1:7777"
+
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	stdoutR, stdoutW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe stdout: %v", err)
+	}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe stderr: %v", err)
+	}
+	os.Stdout = stdoutW
+	os.Stderr = stderrW
+	t.Cleanup(func() {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	})
+
+	printMCPStartupBanner(cfg, true, map[string]any{"token": "managed-token-123"})
+
+	_ = stdoutW.Close()
+	_ = stderrW.Close()
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+
+	stdout, err := io.ReadAll(stdoutR)
+	if err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	stderr, err := io.ReadAll(stderrR)
+	if err != nil {
+		t.Fatalf("read stderr: %v", err)
+	}
+	if strings.TrimSpace(string(stdout)) != "" {
+		t.Fatalf("expected no MCP startup banner output on stdout, got %q", string(stdout))
+	}
+	text := string(stderr)
+	if !strings.Contains(text, "Knit MCP connected.") || !strings.Contains(text, "Chrome extension token: managed-token-123") {
+		t.Fatalf("expected stderr banner to include token setup text, got %q", text)
+	}
+}
+
+func TestCompatibleDaemonForMCPAcceptsManagedWorkerDaemon(t *testing.T) {
+	ok, reason := compatibleDaemonForMCP(map[string]any{
+		"daemon_instance_mode":   daemonInstanceModeManaged,
+		"default_execution_mode": executionModeWorker,
+		"mcp_attach_ready":       true,
+	})
+	if !ok || reason != "" {
+		t.Fatalf("expected compatible daemon instance, got ok=%v reason=%q", ok, reason)
+	}
+}
+
+func TestCompatibleDaemonForMCPRejectsNormalDaemon(t *testing.T) {
+	ok, reason := compatibleDaemonForMCP(map[string]any{
+		"daemon_instance_mode":   "normal",
+		"default_execution_mode": "direct_exec",
+		"mcp_attach_ready":       false,
+	})
+	if ok {
+		t.Fatalf("expected normal daemon instance to be incompatible")
+	}
+	if !strings.Contains(reason, "normal mode") {
+		t.Fatalf("expected normal-mode incompatibility reason, got %q", reason)
 	}
 }

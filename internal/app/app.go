@@ -37,8 +37,11 @@ type App struct {
 
 func DefaultConfig() config.Config {
 	cfg := config.Default()
-	if v := os.Getenv("KNIT_CONTROL_TOKEN"); strings.TrimSpace(v) != "" {
-		cfg.ControlToken = strings.TrimSpace(v)
+	if v := os.Getenv("KNIT_DATA_DIR"); v != "" {
+		cfg.DataDir = v
+	}
+	if token, err := ResolveOrCreateControlToken(cfg.DataDir); err == nil {
+		cfg.ControlToken = token
 	} else {
 		cfg.ControlToken = generateControlToken()
 	}
@@ -47,9 +50,6 @@ func DefaultConfig() config.Config {
 	}
 	if v := os.Getenv("KNIT_CONFIG_LOCKED"); strings.EqualFold(strings.TrimSpace(v), "true") || strings.TrimSpace(v) == "1" {
 		cfg.ConfigLocked = true
-	}
-	if v := os.Getenv("KNIT_DATA_DIR"); v != "" {
-		cfg.DataDir = v
 	}
 	if v := os.Getenv("KNIT_ADDR"); v != "" {
 		cfg.HTTPListenAddr = v

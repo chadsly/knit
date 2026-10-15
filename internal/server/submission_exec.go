@@ -40,32 +40,46 @@ const (
 )
 
 type submitJob struct {
-	AttemptID       string
-	Provider        string
-	Intent          agents.DeliveryIntent
-	Mode            string
-	MaxAttempts     int
-	Package         session.CanonicalPackage
-	ProviderPayload map[string]any
-	WorkdirUsed     string
-	EnqueuedAt      time.Time
-	DeferredUntil   time.Time
-	Source          string
-	Actor           string
+	AttemptID             string
+	Provider              string
+	RequestProvider       string
+	Intent                agents.DeliveryIntent
+	Mode                  string
+	DefaultExecutionMode  string
+	ExecutionMode         string
+	ExecutionModeOverride string
+	MaxAttempts           int
+	Package               session.CanonicalPackage
+	ProviderPayload       map[string]any
+	WorkdirUsed           string
+	EnqueuedAt            time.Time
+	DeferredUntil         time.Time
+	ClaimedByWorkerID     string
+	ClaimedAt             *time.Time
+	LeaseExpiresAt        *time.Time
+	Source                string
+	Actor                 string
 }
 
 type persistedSubmitJob struct {
-	AttemptID     string                   `json:"attempt_id"`
-	Provider      string                   `json:"provider"`
-	Intent        agents.DeliveryIntent    `json:"intent,omitempty"`
-	Mode          string                   `json:"mode"`
-	MaxAttempts   int                      `json:"max_attempts"`
-	Package       session.CanonicalPackage `json:"package"`
-	WorkdirUsed   string                   `json:"workdir_used,omitempty"`
-	EnqueuedAt    time.Time                `json:"enqueued_at"`
-	DeferredUntil time.Time                `json:"deferred_until"`
-	Source        string                   `json:"source,omitempty"`
-	Actor         string                   `json:"actor,omitempty"`
+	AttemptID             string                   `json:"attempt_id"`
+	Provider              string                   `json:"provider"`
+	RequestProvider       string                   `json:"request_provider,omitempty"`
+	Intent                agents.DeliveryIntent    `json:"intent,omitempty"`
+	Mode                  string                   `json:"mode"`
+	DefaultExecutionMode  string                   `json:"default_execution_mode,omitempty"`
+	ExecutionMode         string                   `json:"execution_mode,omitempty"`
+	ExecutionModeOverride string                   `json:"execution_mode_override,omitempty"`
+	MaxAttempts           int                      `json:"max_attempts"`
+	Package               session.CanonicalPackage `json:"package"`
+	WorkdirUsed           string                   `json:"workdir_used,omitempty"`
+	EnqueuedAt            time.Time                `json:"enqueued_at"`
+	DeferredUntil         time.Time                `json:"deferred_until"`
+	ClaimedByWorkerID     string                   `json:"claimed_by_worker_id,omitempty"`
+	ClaimedAt             *time.Time               `json:"claimed_at,omitempty"`
+	LeaseExpiresAt        *time.Time               `json:"lease_expires_at,omitempty"`
+	Source                string                   `json:"source,omitempty"`
+	Actor                 string                   `json:"actor,omitempty"`
 }
 
 type legacySubmitQueueStatePersist struct {
@@ -80,38 +94,47 @@ type submitAttemptEvent struct {
 }
 
 type submitAttempt struct {
-	AttemptID          string               `json:"attempt_id"`
-	SessionID          string               `json:"session_id"`
-	Provider           string               `json:"provider"`
-	IntentProfile      string               `json:"intent_profile,omitempty"`
-	IntentLabel        string               `json:"intent_label,omitempty"`
-	InstructionText    string               `json:"instruction_text,omitempty"`
-	CustomInstructions string               `json:"custom_instructions,omitempty"`
-	WorkdirUsed        string               `json:"workdir_used,omitempty"`
-	Mode               string               `json:"mode"`
-	RequestPreview     string               `json:"request_preview,omitempty"`
-	MaxAttempts        int                  `json:"max_attempts,omitempty"`
-	RetryCount         int                  `json:"retry_count,omitempty"`
-	Status             string               `json:"status"`
-	Note               string               `json:"note,omitempty"`
-	Error              string               `json:"error,omitempty"`
-	RunID              string               `json:"run_id,omitempty"`
-	Ref                string               `json:"ref,omitempty"`
-	QueueWaitMS        int64                `json:"queue_wait_ms,omitempty"`
-	QueuePos           int                  `json:"queue_position,omitempty"`
-	NextRetryAt        *time.Time           `json:"next_retry_at,omitempty"`
-	EnqueuedAt         time.Time            `json:"enqueued_at"`
-	StartedAt          *time.Time           `json:"started_at,omitempty"`
-	CompletedAt        *time.Time           `json:"completed_at,omitempty"`
-	PostSubmit         *postSubmitResult    `json:"post_submit,omitempty"`
-	ExecutionRef       string               `json:"execution_ref,omitempty"`
-	AgentSummary       string               `json:"agent_summary,omitempty"`
-	OutcomeCode        string               `json:"outcome_code,omitempty"`
-	OutcomeTitle       string               `json:"outcome_title,omitempty"`
-	OutcomeMessage     string               `json:"outcome_message,omitempty"`
-	Timeline           []submitAttemptEvent `json:"timeline,omitempty"`
-	Source             string               `json:"source,omitempty"`
-	Actor              string               `json:"actor,omitempty"`
+	AttemptID             string               `json:"attempt_id"`
+	SessionID             string               `json:"session_id"`
+	Provider              string               `json:"provider"`
+	RequestProvider       string               `json:"request_provider,omitempty"`
+	IntentProfile         string               `json:"intent_profile,omitempty"`
+	IntentLabel           string               `json:"intent_label,omitempty"`
+	InstructionText       string               `json:"instruction_text,omitempty"`
+	CustomInstructions    string               `json:"custom_instructions,omitempty"`
+	WorkdirUsed           string               `json:"workdir_used,omitempty"`
+	Mode                  string               `json:"mode"`
+	DefaultExecutionMode  string               `json:"default_execution_mode,omitempty"`
+	ExecutionMode         string               `json:"execution_mode,omitempty"`
+	ExecutionModeOverride string               `json:"execution_mode_override,omitempty"`
+	RequestPreview        string               `json:"request_preview,omitempty"`
+	MaxAttempts           int                  `json:"max_attempts,omitempty"`
+	RetryCount            int                  `json:"retry_count,omitempty"`
+	Status                string               `json:"status"`
+	Note                  string               `json:"note,omitempty"`
+	Error                 string               `json:"error,omitempty"`
+	RunID                 string               `json:"run_id,omitempty"`
+	Ref                   string               `json:"ref,omitempty"`
+	QueueWaitMS           int64                `json:"queue_wait_ms,omitempty"`
+	QueuePos              int                  `json:"queue_position,omitempty"`
+	NextRetryAt           *time.Time           `json:"next_retry_at,omitempty"`
+	ClaimedByWorkerID     string               `json:"claimed_by_worker_id,omitempty"`
+	ClaimedAt             *time.Time           `json:"claimed_at,omitempty"`
+	LeaseExpiresAt        *time.Time           `json:"lease_expires_at,omitempty"`
+	EnqueuedAt            time.Time            `json:"enqueued_at"`
+	StartedAt             *time.Time           `json:"started_at,omitempty"`
+	CompletedAt           *time.Time           `json:"completed_at,omitempty"`
+	PostSubmit            *postSubmitResult    `json:"post_submit,omitempty"`
+	ExecutionRef          string               `json:"execution_ref,omitempty"`
+	AgentSummary          string               `json:"agent_summary,omitempty"`
+	StateCode             string               `json:"state_code,omitempty"`
+	StateMessage          string               `json:"state_message,omitempty"`
+	OutcomeCode           string               `json:"outcome_code,omitempty"`
+	OutcomeTitle          string               `json:"outcome_title,omitempty"`
+	OutcomeMessage        string               `json:"outcome_message,omitempty"`
+	Timeline              []submitAttemptEvent `json:"timeline,omitempty"`
+	Source                string               `json:"source,omitempty"`
+	Actor                 string               `json:"actor,omitempty"`
 }
 
 func normalizeSubmitExecutionMode(v string) string {
@@ -194,15 +217,73 @@ func (s *Server) runSeriesSubmitLoop() {
 func (s *Server) submitQueueState() map[string]any {
 	s.submitMu.Lock()
 	defer s.submitMu.Unlock()
+	now := time.Now().UTC()
+	s.releaseExpiredWorkerClaimsLocked(now)
+	s.refreshWorkerQueueWarningsLocked(now)
+	counts := map[string]int{
+		"direct_exec_queued":  0,
+		"direct_exec_running": 0,
+		"mcp_worker_queued":   0,
+		"mcp_worker_claimed":  0,
+	}
+	for _, attempt := range s.submitAttempts {
+		switch normalizeExecutionMode(attempt.ExecutionMode) {
+		case executionModeWorker:
+			switch strings.TrimSpace(attempt.Status) {
+			case "queued", "retry_wait", "deferred_offline":
+				counts["mcp_worker_queued"]++
+			case "in_progress":
+				if strings.TrimSpace(attempt.ClaimedByWorkerID) != "" {
+					counts["mcp_worker_claimed"]++
+				}
+			}
+		default:
+			switch strings.TrimSpace(attempt.Status) {
+			case "queued", "retry_wait", "deferred_offline":
+				counts["direct_exec_queued"]++
+			case "in_progress":
+				counts["direct_exec_running"]++
+			}
+		}
+	}
+	workerState := s.workerConnectivityStateLocked(now)
+	warnings := []queueStateMessage{}
+	seenWarnings := map[string]struct{}{}
+	for _, attempt := range s.submitAttempts {
+		if normalizeExecutionMode(attempt.ExecutionMode) != executionModeWorker {
+			continue
+		}
+		switch strings.TrimSpace(attempt.Status) {
+		case "queued", "retry_wait", "deferred_offline", "in_progress":
+		default:
+			continue
+		}
+		code := strings.TrimSpace(attempt.StateCode)
+		if code == "" {
+			continue
+		}
+		if _, ok := seenWarnings[code]; ok {
+			continue
+		}
+		seenWarnings[code] = struct{}{}
+		warnings = append(warnings, queueStateMessage{Code: code, Message: firstNonEmptyString(strings.TrimSpace(attempt.StateMessage), queueStateMessageForCode(code, attempt.RequestProvider))})
+	}
 	return map[string]any{
-		"queued":                s.submitQ,
-		"running":               s.submitRun,
-		"mode":                  s.submitExecutionMode(),
-		"parallel_pending":      s.parallelPending,
-		"post_submit_running":   s.parallelPostRunning,
-		"max_attempts_default":  submitMaxAttempts(),
-		"retry_backoff_seconds": submitRetryBackoffSeconds(),
-		"offline_retry_seconds": offlineRetrySeconds(),
+		"queued":                 s.submitQ,
+		"running":                s.submitRun,
+		"mode":                   s.submitExecutionMode(),
+		"default_execution_mode": s.defaultExecutionMode(),
+		"direct_exec_queued":     counts["direct_exec_queued"],
+		"direct_exec_running":    counts["direct_exec_running"],
+		"mcp_worker_queued":      counts["mcp_worker_queued"],
+		"mcp_worker_claimed":     counts["mcp_worker_claimed"],
+		"worker_connectivity":    workerState,
+		"warnings":               warnings,
+		"parallel_pending":       s.parallelPending,
+		"post_submit_running":    s.parallelPostRunning,
+		"max_attempts_default":   submitMaxAttempts(),
+		"retry_backoff_seconds":  submitRetryBackoffSeconds(),
+		"offline_retry_seconds":  offlineRetrySeconds(),
 	}
 }
 
@@ -363,24 +444,29 @@ func (s *Server) cancelSubmitAttempt(attemptID, source, actor string) (submitAtt
 	return snapshot, true, nil
 }
 
-func (s *Server) enqueueSubmitJob(provider string, pkg session.CanonicalPackage, providerPayload map[string]any, intent agents.DeliveryIntent, source string, actor string) submitAttempt {
-	mode := s.submitExecutionMode()
-	mode = normalizeSubmitExecutionMode(mode)
+func (s *Server) enqueueSubmitJob(provider string, pkg session.CanonicalPackage, executionModeOverride string, providerPayload map[string]any, intent agents.DeliveryIntent, source string, actor string) submitAttempt {
+	mode := normalizeSubmitExecutionMode(s.submitExecutionMode())
+	defaultExecutionMode := s.defaultExecutionMode()
+	effectiveExecutionMode := normalizeExecutionMode(firstNonEmptyString(executionModeOverride, defaultExecutionMode))
 	enqueuedAt := time.Now().UTC()
 	requestPreview := submitRequestPreview(pkg)
 	intent = agents.NormalizeDeliveryIntent(intent)
 	job := submitJob{
-		Provider:        provider,
-		Intent:          intent,
-		Mode:            mode,
-		MaxAttempts:     submitMaxAttempts(),
-		Package:         pkg,
-		ProviderPayload: providerPayload,
-		WorkdirUsed:     s.effectiveSubmitWorkspace(provider),
-		EnqueuedAt:      enqueuedAt,
-		DeferredUntil:   time.Time{},
-		Source:          strings.TrimSpace(source),
-		Actor:           strings.TrimSpace(actor),
+		Provider:              provider,
+		RequestProvider:       provider,
+		Intent:                intent,
+		Mode:                  mode,
+		DefaultExecutionMode:  defaultExecutionMode,
+		ExecutionMode:         effectiveExecutionMode,
+		ExecutionModeOverride: normalizeExecutionMode(executionModeOverride),
+		MaxAttempts:           submitMaxAttempts(),
+		Package:               pkg,
+		ProviderPayload:       providerPayload,
+		WorkdirUsed:           s.effectiveSubmitWorkspace(provider),
+		EnqueuedAt:            enqueuedAt,
+		DeferredUntil:         time.Time{},
+		Source:                strings.TrimSpace(source),
+		Actor:                 strings.TrimSpace(actor),
 	}
 	s.submitMu.Lock()
 	s.submitSeq++
@@ -391,28 +477,56 @@ func (s *Server) enqueueSubmitJob(provider string, pkg session.CanonicalPackage,
 		s.parallelPending++
 	}
 	attempt := submitAttempt{
-		AttemptID:          job.AttemptID,
-		SessionID:          pkg.SessionID,
-		Provider:           provider,
-		IntentProfile:      intent.Profile,
-		IntentLabel:        intent.Label(),
-		InstructionText:    intent.InstructionText,
-		CustomInstructions: intent.CustomInstructions,
-		WorkdirUsed:        job.WorkdirUsed,
-		Mode:               mode,
-		RequestPreview:     requestPreview,
-		MaxAttempts:        job.MaxAttempts,
-		Status:             "queued",
-		Note:               "Queued for submission",
-		QueuePos:           queuePos,
-		EnqueuedAt:         enqueuedAt,
-		StartedAt:          nil,
-		CompletedAt:        nil,
-		Source:             job.Source,
-		Actor:              job.Actor,
+		AttemptID:             job.AttemptID,
+		SessionID:             pkg.SessionID,
+		Provider:              provider,
+		RequestProvider:       provider,
+		IntentProfile:         intent.Profile,
+		IntentLabel:           intent.Label(),
+		InstructionText:       intent.InstructionText,
+		CustomInstructions:    intent.CustomInstructions,
+		WorkdirUsed:           job.WorkdirUsed,
+		Mode:                  mode,
+		DefaultExecutionMode:  defaultExecutionMode,
+		ExecutionMode:         effectiveExecutionMode,
+		ExecutionModeOverride: strings.TrimSpace(executionModeOverride),
+		RequestPreview:        requestPreview,
+		MaxAttempts:           job.MaxAttempts,
+		Status:                "queued",
+		Note:                  "Queued for submission",
+		StateCode:             "",
+		StateMessage:          "",
+		QueuePos:              queuePos,
+		EnqueuedAt:            enqueuedAt,
+		StartedAt:             nil,
+		CompletedAt:           nil,
+		Source:                job.Source,
+		Actor:                 job.Actor,
+	}
+	if effectiveExecutionMode == executionModeWorker {
+		attempt.Note = "Queued for worker"
+		onlineWorkers := 0
+		compatibleWorkers := 0
+		for _, worker := range s.submitWorkers {
+			if !workerEligibleForNewWork(worker, enqueuedAt) {
+				continue
+			}
+			onlineWorkers++
+			if workerSupportsProvider(worker, provider) {
+				compatibleWorkers++
+			}
+		}
+		if code, message := queueStateMessageForWorkerAvailability(provider, onlineWorkers, compatibleWorkers); code != "" {
+			attempt.StateCode = code
+			attempt.StateMessage = message
+		}
 	}
 	s.prependSubmitAttemptLocked(attempt)
-	s.appendAttemptTimelineLocked(job.AttemptID, "queued", attempt.Note)
+	queuedNote := attempt.Note
+	if strings.TrimSpace(attempt.StateMessage) != "" {
+		queuedNote = attempt.StateMessage
+	}
+	s.appendAttemptTimelineLocked(job.AttemptID, "queued", queuedNote)
 	s.submitPending = append(s.submitPending, job)
 	s.persistSubmitQueueLocked()
 	s.submitMu.Unlock()
@@ -421,17 +535,20 @@ func (s *Server) enqueueSubmitJob(provider string, pkg session.CanonicalPackage,
 		SessionID: pkg.SessionID,
 		Actor:     job.Actor,
 		Details: map[string]any{
-			"provider":   provider,
-			"attempt_id": job.AttemptID,
-			"mode":       mode,
-			"queue_pos":  queuePos,
-			"source":     job.Source,
+			"provider":       provider,
+			"attempt_id":     job.AttemptID,
+			"mode":           mode,
+			"execution_mode": effectiveExecutionMode,
+			"queue_pos":      queuePos,
+			"source":         job.Source,
 		},
 	})
-	if mode == submitExecutionSeries {
-		s.submitSeriesCh <- job
-	} else {
-		go s.processSubmitJob(job)
+	if effectiveExecutionMode == executionModeDirect {
+		if mode == submitExecutionSeries {
+			s.submitSeriesCh <- job
+		} else {
+			go s.processSubmitJob(job)
+		}
 	}
 	return attempt
 }
@@ -485,6 +602,9 @@ func (s *Server) appendAttemptTimelineLocked(attemptID, status, note string) {
 }
 
 func (s *Server) processSubmitJob(job submitJob) {
+	if normalizeExecutionMode(job.ExecutionMode) != executionModeDirect {
+		return
+	}
 	startedAt := time.Now().UTC()
 	waitMS := time.Since(job.EnqueuedAt).Milliseconds()
 	submitCtx, cancel := context.WithCancel(context.Background())
@@ -818,14 +938,18 @@ func (s *Server) shouldDeferOffline(provider string, err error) bool {
 
 type submitQueueStatePersist struct {
 	Pending []persistedSubmitJob `json:"pending"`
+	Claimed []persistedSubmitJob `json:"claimed,omitempty"`
 	Running []persistedSubmitJob `json:"running"`
 }
 
 func parsePersistedSubmitQueue(b []byte) ([]submitJob, error) {
 	var persisted submitQueueStatePersist
 	if err := json.Unmarshal(b, &persisted); err == nil {
-		recovered := make([]submitJob, 0, len(persisted.Running)+len(persisted.Pending))
+		recovered := make([]submitJob, 0, len(persisted.Running)+len(persisted.Claimed)+len(persisted.Pending))
 		for _, job := range persisted.Running {
+			recovered = append(recovered, job.toSubmitJob())
+		}
+		for _, job := range persisted.Claimed {
 			recovered = append(recovered, job.toSubmitJob())
 		}
 		for _, job := range persisted.Pending {
@@ -848,15 +972,18 @@ func parsePersistedSubmitQueue(b []byte) ([]submitJob, error) {
 func normalizeRecoveredSubmitJob(job submitJob, state string, index int) (submitJob, []string, string) {
 	notes := []string{}
 	job.Provider = canonicalProviderAlias(job.Provider, nil)
+	job.RequestProvider = canonicalProviderAlias(firstNonEmptyString(job.RequestProvider, job.Provider), nil)
 	job.Intent = agents.NormalizeDeliveryIntent(job.Intent)
 	if job.Provider == "" {
 		return submitJob{}, nil, "provider missing"
 	}
 	job.Mode = normalizeSubmitExecutionMode(job.Mode)
+	job.DefaultExecutionMode = normalizeExecutionMode(job.DefaultExecutionMode)
+	job.ExecutionMode = normalizeExecutionMode(firstNonEmptyString(job.ExecutionMode, job.DefaultExecutionMode))
 	if strings.TrimSpace(job.Package.SessionID) == "" {
 		return submitJob{}, nil, "session id missing"
 	}
-	if len(job.Package.ChangeRequests) == 0 {
+	if !canonicalPackageHasInput(&job.Package) {
 		return submitJob{}, nil, "no change requests to recover"
 	}
 	if strings.TrimSpace(job.AttemptID) == "" {
@@ -871,7 +998,7 @@ func normalizeRecoveredSubmitJob(job submitJob, state string, index int) (submit
 		job.EnqueuedAt = time.Now().UTC()
 		notes = append(notes, fmt.Sprintf("Recovered delivery %s was missing its queue time; Knit treated it as newly recovered.", job.AttemptID))
 	}
-	if state == "running" {
+	if state == "running" || state == "claimed" {
 		notes = append(notes, fmt.Sprintf("Recovered in-progress delivery %s after restart. Knit resumed it automatically, so check Current run or Recent runs for its latest status.", job.AttemptID))
 	}
 	return job, notes, ""
@@ -879,33 +1006,47 @@ func normalizeRecoveredSubmitJob(job submitJob, state string, index int) (submit
 
 func toPersistedSubmitJob(job submitJob) persistedSubmitJob {
 	return persistedSubmitJob{
-		AttemptID:     job.AttemptID,
-		Provider:      job.Provider,
-		Intent:        job.Intent,
-		Mode:          job.Mode,
-		MaxAttempts:   job.MaxAttempts,
-		Package:       job.Package,
-		WorkdirUsed:   job.WorkdirUsed,
-		EnqueuedAt:    job.EnqueuedAt,
-		DeferredUntil: job.DeferredUntil,
-		Source:        job.Source,
-		Actor:         job.Actor,
+		AttemptID:             job.AttemptID,
+		Provider:              job.Provider,
+		RequestProvider:       firstNonEmptyString(job.RequestProvider, job.Provider),
+		Intent:                job.Intent,
+		Mode:                  job.Mode,
+		DefaultExecutionMode:  job.DefaultExecutionMode,
+		ExecutionMode:         job.ExecutionMode,
+		ExecutionModeOverride: job.ExecutionModeOverride,
+		MaxAttempts:           job.MaxAttempts,
+		Package:               job.Package,
+		WorkdirUsed:           job.WorkdirUsed,
+		EnqueuedAt:            job.EnqueuedAt,
+		DeferredUntil:         job.DeferredUntil,
+		ClaimedByWorkerID:     job.ClaimedByWorkerID,
+		ClaimedAt:             job.ClaimedAt,
+		LeaseExpiresAt:        job.LeaseExpiresAt,
+		Source:                job.Source,
+		Actor:                 job.Actor,
 	}
 }
 
 func (job persistedSubmitJob) toSubmitJob() submitJob {
 	return submitJob{
-		AttemptID:     job.AttemptID,
-		Provider:      job.Provider,
-		Intent:        job.Intent,
-		Mode:          job.Mode,
-		MaxAttempts:   job.MaxAttempts,
-		Package:       job.Package,
-		WorkdirUsed:   job.WorkdirUsed,
-		EnqueuedAt:    job.EnqueuedAt,
-		DeferredUntil: job.DeferredUntil,
-		Source:        job.Source,
-		Actor:         job.Actor,
+		AttemptID:             job.AttemptID,
+		Provider:              job.Provider,
+		RequestProvider:       firstNonEmptyString(job.RequestProvider, job.Provider),
+		Intent:                job.Intent,
+		Mode:                  job.Mode,
+		DefaultExecutionMode:  job.DefaultExecutionMode,
+		ExecutionMode:         job.ExecutionMode,
+		ExecutionModeOverride: job.ExecutionModeOverride,
+		MaxAttempts:           job.MaxAttempts,
+		Package:               job.Package,
+		WorkdirUsed:           job.WorkdirUsed,
+		EnqueuedAt:            job.EnqueuedAt,
+		DeferredUntil:         job.DeferredUntil,
+		ClaimedByWorkerID:     job.ClaimedByWorkerID,
+		ClaimedAt:             job.ClaimedAt,
+		LeaseExpiresAt:        job.LeaseExpiresAt,
+		Source:                job.Source,
+		Actor:                 job.Actor,
 	}
 }
 
@@ -947,6 +1088,10 @@ func (s *Server) persistSubmitQueueLocked() {
 	for _, job := range s.submitRunning {
 		running = append(running, job)
 	}
+	claimed := make([]persistedSubmitJob, 0, len(s.submitClaimed))
+	for _, job := range s.submitClaimed {
+		claimed = append(claimed, toPersistedSubmitJob(job))
+	}
 	pending := make([]persistedSubmitJob, 0, len(s.submitPending))
 	for _, job := range s.submitPending {
 		pending = append(pending, toPersistedSubmitJob(job))
@@ -957,6 +1102,7 @@ func (s *Server) persistSubmitQueueLocked() {
 	}
 	payload := submitQueueStatePersist{
 		Pending: pending,
+		Claimed: claimed,
 		Running: persistedRunning,
 	}
 	b, err := json.Marshal(payload)
@@ -989,9 +1135,12 @@ func (s *Server) recoverSubmitQueueFromDisk() {
 	}
 	jobStates := make([]recoveredJobState, 0, len(recovered))
 	var persistedNew submitQueueStatePersist
-	if err := json.Unmarshal(b, &persistedNew); err == nil && (len(persistedNew.Running) > 0 || len(persistedNew.Pending) > 0) {
+	if err := json.Unmarshal(b, &persistedNew); err == nil && (len(persistedNew.Running) > 0 || len(persistedNew.Claimed) > 0 || len(persistedNew.Pending) > 0) {
 		for _, job := range persistedNew.Running {
 			jobStates = append(jobStates, recoveredJobState{job: job.toSubmitJob(), state: "running"})
+		}
+		for _, job := range persistedNew.Claimed {
+			jobStates = append(jobStates, recoveredJobState{job: job.toSubmitJob(), state: "claimed"})
 		}
 		for _, job := range persistedNew.Pending {
 			jobStates = append(jobStates, recoveredJobState{job: job.toSubmitJob(), state: "pending"})
@@ -1031,26 +1180,49 @@ func (s *Server) recoverSubmitQueueFromDisk() {
 		}
 		s.submitPending = append(s.submitPending, job)
 		attempt := submitAttempt{
-			AttemptID:          job.AttemptID,
-			SessionID:          job.Package.SessionID,
-			Provider:           job.Provider,
-			IntentProfile:      agents.NormalizeDeliveryIntent(job.Intent).Profile,
-			IntentLabel:        agents.NormalizeDeliveryIntent(job.Intent).Label(),
-			InstructionText:    agents.NormalizeDeliveryIntent(job.Intent).InstructionText,
-			CustomInstructions: agents.NormalizeDeliveryIntent(job.Intent).CustomInstructions,
-			WorkdirUsed:        job.WorkdirUsed,
-			Mode:               job.Mode,
-			RequestPreview:     submitRequestPreview(job.Package),
-			MaxAttempts:        job.MaxAttempts,
-			Status:             "queued",
-			Note:               "Recovered after daemon restart",
-			QueuePos:           s.submitQ,
-			EnqueuedAt:         job.EnqueuedAt,
+			AttemptID:             job.AttemptID,
+			SessionID:             job.Package.SessionID,
+			Provider:              job.Provider,
+			RequestProvider:       firstNonEmptyString(job.RequestProvider, job.Provider),
+			IntentProfile:         agents.NormalizeDeliveryIntent(job.Intent).Profile,
+			IntentLabel:           agents.NormalizeDeliveryIntent(job.Intent).Label(),
+			InstructionText:       agents.NormalizeDeliveryIntent(job.Intent).InstructionText,
+			CustomInstructions:    agents.NormalizeDeliveryIntent(job.Intent).CustomInstructions,
+			WorkdirUsed:           job.WorkdirUsed,
+			Mode:                  job.Mode,
+			DefaultExecutionMode:  job.DefaultExecutionMode,
+			ExecutionMode:         job.ExecutionMode,
+			ExecutionModeOverride: job.ExecutionModeOverride,
+			RequestPreview:        submitRequestPreview(job.Package),
+			MaxAttempts:           job.MaxAttempts,
+			Status:                "queued",
+			Note:                  "Recovered after daemon restart",
+			StateCode:             "",
+			StateMessage:          "",
+			QueuePos:              s.submitQ,
+			EnqueuedAt:            job.EnqueuedAt,
 		}
 		if !job.DeferredUntil.IsZero() && job.DeferredUntil.After(time.Now().UTC()) {
 			attempt.Status = "deferred_offline"
 			attempt.Note = fmt.Sprintf("Recovered deferred submission; retrying at %s", job.DeferredUntil.Format(time.RFC3339))
 			attempt.NextRetryAt = &job.DeferredUntil
+		} else if normalizeExecutionMode(job.ExecutionMode) == executionModeWorker {
+			attempt.Note = "Queued for worker"
+			onlineWorkers := 0
+			compatibleWorkers := 0
+			for _, worker := range s.submitWorkers {
+				if !workerEligibleForNewWork(worker, time.Now().UTC()) {
+					continue
+				}
+				onlineWorkers++
+				if workerSupportsProvider(worker, attempt.RequestProvider) {
+					compatibleWorkers++
+				}
+			}
+			if code, message := queueStateMessageForWorkerAvailability(attempt.RequestProvider, onlineWorkers, compatibleWorkers); code != "" {
+				attempt.StateCode = code
+				attempt.StateMessage = message
+			}
 		}
 		s.prependSubmitAttemptLocked(attempt)
 		s.appendAttemptTimelineLocked(job.AttemptID, "recovered", "Recovered queued submission after daemon restart")
@@ -1059,6 +1231,9 @@ func (s *Server) recoverSubmitQueueFromDisk() {
 	s.submitMu.Unlock()
 
 	for _, job := range validRecovered {
+		if normalizeExecutionMode(job.ExecutionMode) == executionModeWorker {
+			continue
+		}
 		if !job.DeferredUntil.IsZero() && job.DeferredUntil.After(time.Now().UTC()) {
 			s.scheduleDeferredSubmit(job, job.DeferredUntil)
 			continue

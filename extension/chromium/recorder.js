@@ -173,8 +173,8 @@ function isTerminalSubmitStatus(status) {
 }
 
 function submitAttemptOutcomeNoticeMessage(attempt) {
-  const title = String(attempt?.outcome_title || "").trim();
-  const message = String(attempt?.outcome_message || "").trim();
+  const title = String(attempt?.outcome_title || attempt?.state_code || "").trim();
+  const message = String(attempt?.outcome_message || attempt?.state_message || "").trim();
   if (title && message) return `${title}: ${message}`;
   return message || title;
 }
@@ -258,6 +258,12 @@ function renderQueueIndicator() {
   const queue = currentSessionPayload?.submit_queue || {};
   const running = Number(queue?.running || 0);
   const queued = Number(queue?.queued || 0);
+  const workerState = queue?.worker_connectivity || {};
+  const defaultExecutionMode = String(queue?.default_execution_mode || currentSessionPayload?.runtime_codex?.default_execution_mode || "").trim();
+  const warnings = Array.isArray(queue?.warnings) ? queue.warnings : [];
+  const workerBusy = Number(workerState?.busy || 0);
+  const workerIdle = Number(workerState?.idle || 0);
+  const workerQueued = Number(queue?.mcp_worker_queued || 0);
   const visible = attempts
     .filter((attempt) => {
       const status = String(attempt?.status || "").trim();
@@ -270,6 +276,18 @@ function renderQueueIndicator() {
     return;
   }
   const summary = `${running} running, ${queued} queued`;
+  let detail = "";
+  if (warnings.length) {
+    detail = String(warnings[0]?.message || "").trim();
+  } else if (defaultExecutionMode === "mcp_worker" && workerQueued > 0) {
+    if (workerBusy > 0) {
+      detail = "Worker connected and busy. Queued requests are waiting for claim.";
+    } else if (workerIdle > 0) {
+      detail = "Worker connected and idle. Queued requests are waiting for claim.";
+    } else {
+      detail = "No compatible worker is connected. Queued requests will wait.";
+    }
+  }
   const rows = visible.length
     ? `<table class="queue-table"><tbody>${visible.map((attempt) => {
         const attemptID = String(attempt?.attempt_id || "").trim();
@@ -278,21 +296,35 @@ function renderQueueIndicator() {
         return `<tr><td><button type="button" class="queue-link" data-attempt-link="${escapeHTML(attemptID)}" title="Open ${escapeHTML(label)} in the main UI">${escapeHTML(label)}</button></td><td>${escapeHTML(status)}</td></tr>`;
       }).join("")}</tbody></table>`
     : "";
-  queueIndicatorEl.innerHTML = `<div>Queue: ${escapeHTML(summary)}</div>${rows}`;
+  queueIndicatorEl.innerHTML = `<div>Queue: ${escapeHTML(summary)}</div>${detail ? `<div class="helper">${escapeHTML(detail)}</div>` : ""}${rows}`;
   queueIndicatorEl.classList.remove("hidden");
 }
 
 function queueAttemptStatusLabel(attempt) {
   const status = String(attempt?.status || "").trim();
+  const executionMode = String(attempt?.execution_mode || "").trim();
+  const stateCode = String(attempt?.state_code || "").trim();
   switch (status) {
     case "submitted":
       return "completed";
+    case "queued":
+      if (executionMode === "mcp_worker" && (stateCode === "no_compatible_worker" || stateCode === "worker_not_connected" || stateCode === "worker_disconnected")) {
+        return "waiting";
+      }
+      return "queued";
     case "in_progress":
+      if (executionMode === "mcp_worker" && String(attempt?.claimed_by_worker_id || "").trim()) {
+        return "claimed";
+      }
       return "running";
     case "retry_wait":
       return "retrying";
     case "deferred_offline":
       return "waiting";
+    case "canceled":
+      return "canceled";
+    case "failed":
+      return "failed";
     default:
       return status || "recent";
   }
@@ -1424,9 +1456,12 @@ async function submit() {
     await refreshSession(true);
     const provider = String(data?.provider || "default adapter").trim() || "default adapter";
     const attemptID = String(data?.attempt_id || "").trim();
+    const executionMode = String(data?.execution_mode || "").trim();
     watchedSubmitAttemptID = attemptID;
     if (attemptID) ensureSubmitAttemptWatchTimer();
-    const message = `Request queued via ${provider}${attemptID ? ` (${attemptID})` : ""}.`;
+    const message = executionMode === "mcp_worker"
+      ? `Queued for worker via ${provider}${attemptID ? ` (${attemptID})` : ""}.`
+      : `Request queued via ${provider}${attemptID ? ` (${attemptID})` : ""}.`;
     setStatus("");
     setSubmitNotice(message);
     await callBackground({

@@ -15,6 +15,12 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && strings.EqualFold(strings.TrimSpace(os.Args[1]), "mcp") {
+		if err := runMCPCommand(os.Args[2:]); err != nil {
+			log.Fatalf("knit mcp failed: %v", err)
+		}
+		return
+	}
 	cfg := app.DefaultConfig()
 	cleanupLog, logPath, err := processlog.Setup("daemon", cfg.DataDir)
 	if err != nil {

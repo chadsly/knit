@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestDefaultConfigUsesManagedFasterWhisperByDefault(t *testing.T) {
 	cfg := DefaultConfig()
@@ -70,5 +74,33 @@ func TestDefaultConfigReadsEnvironmentControls(t *testing.T) {
 	}
 	if cfg.SIEMLogPath != "siem/audit.jsonl" {
 		t.Fatalf("unexpected siem log path: %s", cfg.SIEMLogPath)
+	}
+}
+
+func TestResolveOrCreateControlTokenReusesPersistedFile(t *testing.T) {
+	dir := t.TempDir()
+
+	first, err := ResolveOrCreateControlToken(dir)
+	if err != nil {
+		t.Fatalf("resolve first control token: %v", err)
+	}
+	if first == "" {
+		t.Fatalf("expected first control token")
+	}
+
+	second, err := ResolveOrCreateControlToken(dir)
+	if err != nil {
+		t.Fatalf("resolve second control token: %v", err)
+	}
+	if second != first {
+		t.Fatalf("expected persisted control token reuse, got %q then %q", first, second)
+	}
+
+	info, err := os.Stat(filepath.Join(dir, controlTokenFilename))
+	if err != nil {
+		t.Fatalf("stat persisted control token: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("expected control token file mode 0600, got %#o", got)
 	}
 }

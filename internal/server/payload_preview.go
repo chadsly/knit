@@ -13,9 +13,12 @@ import (
 )
 
 type payloadPreviewResponse struct {
-	Provider string                 `json:"provider"`
-	Payload  any                    `json:"payload"`
-	Preview  renderedPayloadPreview `json:"preview"`
+	Provider              string                 `json:"provider"`
+	ExecutionMode         string                 `json:"execution_mode,omitempty"`
+	DefaultExecutionMode  string                 `json:"default_execution_mode,omitempty"`
+	ExecutionModeOverride string                 `json:"execution_mode_override,omitempty"`
+	Payload               any                    `json:"payload"`
+	Preview               renderedPayloadPreview `json:"preview"`
 }
 
 type renderedPayloadPreview struct {

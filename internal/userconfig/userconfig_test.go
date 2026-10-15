@@ -19,6 +19,7 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	state.System.AutoStartEnabled = true
 	state.System.CheckUpdatesOnStartup = false
 	state.RuntimeCodex.DefaultProvider = "claude_api"
+	state.RuntimeCodex.DefaultExecutionMode = operatorstate.DefaultExecutionModeWorker
 	state.RuntimeCodex.CodexWorkdir = "/tmp/knit-workdir"
 	state.RuntimeCodex.DeliveryIntentProfile = "create_jira_tickets"
 	state.RuntimeCodex.CreateJiraTicketsPrompt = "Create tickets only.\nDo not edit files."
@@ -48,6 +49,9 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	if !strings.Contains(text, `default_provider = "claude_api"`) {
 		t.Fatalf("expected saved default provider in config, got:\n%s", text)
 	}
+	if !strings.Contains(text, `default_execution_mode = "mcp_worker"`) {
+		t.Fatalf("expected saved default execution mode in config, got:\n%s", text)
+	}
 	if !strings.Contains(text, `default_template = "create_jira_tickets"`) {
 		t.Fatalf("expected saved prompt template in config, got:\n%s", text)
 	}
@@ -61,6 +65,9 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	}
 	if loaded.State.RuntimeCodex.DefaultProvider != "claude_api" {
 		t.Fatalf("expected loaded default provider claude_api, got %q", loaded.State.RuntimeCodex.DefaultProvider)
+	}
+	if loaded.State.RuntimeCodex.DefaultExecutionMode != operatorstate.DefaultExecutionModeWorker {
+		t.Fatalf("expected loaded default execution mode mcp_worker, got %q", loaded.State.RuntimeCodex.DefaultExecutionMode)
 	}
 	if loaded.State.System.CheckUpdatesOnStartup {
 		t.Fatalf("expected loaded startup update check to remain disabled")
@@ -88,6 +95,7 @@ func TestRenderIncludesCommentedDefaults(t *testing.T) {
 		"# check_updates_on_startup = true",
 		"# allowed: faster_whisper, local, lmstudio, remote",
 		"# choose from: codex_cli, claude_cli, opencode_cli, codex_api, claude_api",
+		"# allowed: direct_exec, mcp_worker",
 		"# allowed: series, parallel",
 		"# allowed: always_on, push_to_talk",
 		"# allow_remote_submit = true",

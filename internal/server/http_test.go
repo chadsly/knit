@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -263,6 +264,18 @@ func TestHealthIncludesRuntimePlatformMetadata(t *testing.T) {
 	if runtimePlatform["host_target"] == "" || runtimePlatform["runtime_summary"] == "" {
 		t.Fatalf("expected runtime platform metadata, got %#v", runtimePlatform)
 	}
+	if got := payload["daemon_instance_mode"]; got != daemonInstanceModeNormal {
+		t.Fatalf("expected daemon instance mode %q, got %#v", daemonInstanceModeNormal, got)
+	}
+	if got := payload["default_execution_mode"]; got != executionModeDirect {
+		t.Fatalf("expected default execution mode %q, got %#v", executionModeDirect, got)
+	}
+	if ready, _ := payload["mcp_attach_ready"].(bool); ready {
+		t.Fatalf("expected normal daemon instance to be MCP attach-incompatible, got %#v", payload)
+	}
+	if id := strings.TrimSpace(fmt.Sprintf("%v", payload["daemon_instance_id"])); id == "" {
+		t.Fatalf("expected daemon instance id in health payload, got %#v", payload)
+	}
 }
 
 func TestCompanionScriptUsesConfiguredPointerSamplingRate(t *testing.T) {
@@ -507,6 +520,12 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	}
 	if !strings.Contains(body, `id="captureOptionExtension"`) || !strings.Contains(body, `>Easy<`) || !strings.Contains(body, `Chrome Extension`) {
 		t.Fatalf("expected step 2 to render the easy Chrome Extension path")
+	}
+	if !strings.Contains(body, `id="copyManagedExtensionTokenBtn"`) || !strings.Contains(body, `Copy browser token`) || !strings.Contains(body, `id="managedExtensionTokenState"`) {
+		t.Fatalf("expected Chrome Extension section to expose browser token copy controls")
+	}
+	if !strings.Contains(body, `id="defaultExecutionMode"`) || !strings.Contains(body, `value="mcp_worker"`) {
+		t.Fatalf("expected agent settings to expose default execution mode controls")
 	}
 	if strings.Contains(body, `>Install guide</span>`) || strings.Contains(body, `onclick="openDocsBrowser('getting_started.md')"`) {
 		t.Fatalf("did not expect the Chrome Extension option card to render a dedicated install-guide button now that docs live in the shared action row")
@@ -787,7 +806,7 @@ func TestIndexIncludesFloatingComposerControl(t *testing.T) {
 	if !strings.Contains(body, "id=\"appToast\"") || !strings.Contains(body, "showToast('Connect browser link copied')") {
 		t.Fatalf("expected index to include toast feedback for connect-browser copy")
 	}
-	if !strings.Contains(body, `showToast('Request submitted to ' + destination + ' for "`) {
+	if !strings.Contains(body, `showToast((executionMode === 'mcp_worker' ? 'Request queued for worker via ' : 'Request submitted to ') + destination + ' for "`) {
 		t.Fatalf("expected index to show a toast when submission succeeds")
 	}
 	if !strings.Contains(body, "function notifySubmitAttemptTransitions(attempts)") || !strings.Contains(body, "showToast(submitAttemptToastMessage(attempt), status === 'failed' || submitAttemptNeedsAttention(attempt))") {
@@ -1404,6 +1423,9 @@ func TestFloatingComposerEndpointRequiresAuthAndRenders(t *testing.T) {
 	if !strings.Contains(body, "id=\"fcCaptureInputValuesToggle\"") || !strings.Contains(body, "Capture typed values for replay") {
 		t.Fatalf("expected floating composer settings to expose replay value-capture consent toggle")
 	}
+	if !strings.Contains(body, "id=\"fcDefaultExecutionMode\"") || !strings.Contains(body, "value=\"mcp_worker\"") {
+		t.Fatalf("expected floating composer settings to expose default execution mode controls")
+	}
 	if !strings.Contains(body, "id=\"fcAllowLargeInlineMediaToggle\"") || !strings.Contains(body, "Allow large inline media when needed") {
 		t.Fatalf("expected floating composer settings to expose large-media send control")
 	}
@@ -1498,7 +1520,7 @@ func TestFloatingComposerEndpointRequiresAuthAndRenders(t *testing.T) {
 	if !strings.Contains(body, "id=\"fcToast\"") || !strings.Contains(body, "showToastFC('Connect browser link copied')") {
 		t.Fatalf("expected floating composer to include toast feedback for connect-browser copy")
 	}
-	if !strings.Contains(body, `showToastFC('Request submitted to ' + destination + ' for "`) {
+	if !strings.Contains(body, `showToastFC((executionMode === 'mcp_worker' ? 'Request queued for worker via ' : 'Request submitted to ') + destination + ' for "`) {
 		t.Fatalf("expected floating composer to show a toast when submission succeeds")
 	}
 	if !strings.Contains(body, "function notifySubmitAttemptTransitionsFC(attempts)") || !strings.Contains(body, "showToastFC(submitAttemptToastMessageFC(attempt), status === 'failed' || submitAttemptNeedsAttentionFC(attempt))") {
@@ -4870,7 +4892,7 @@ func TestCancelSubmitAttemptEndpointCancelsQueuedAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve first package: %v", err)
 	}
-	first := srv.enqueueSubmitJob("fake_queue", *pkg1, map[string]any{"id": "one"}, agents.DeliveryIntent{}, "test", "test")
+	first := srv.enqueueSubmitJob("fake_queue", *pkg1, "", map[string]any{"id": "one"}, agents.DeliveryIntent{}, "test", "test")
 
 	if _, err := srv.sessions.AddFeedback(session.FeedbackEvt{RawTranscript: "second", NormalizedText: "second"}); err != nil {
 		t.Fatalf("add second feedback: %v", err)
@@ -4882,7 +4904,7 @@ func TestCancelSubmitAttemptEndpointCancelsQueuedAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve second package: %v", err)
 	}
-	second := srv.enqueueSubmitJob("fake_queue", *pkg2, map[string]any{"id": "two"}, agents.DeliveryIntent{}, "test", "test")
+	second := srv.enqueueSubmitJob("fake_queue", *pkg2, "", map[string]any{"id": "two"}, agents.DeliveryIntent{}, "test", "test")
 
 	_ = waitForAttemptStatus(t, srv, cfg.ControlToken, first.AttemptID, "in_progress", 3*time.Second)
 
@@ -4936,7 +4958,7 @@ func TestRerunSubmitAttemptEndpointRequeuesWithCurrentWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preview provider payload: %v", err)
 	}
-	original := srv.enqueueSubmitJob("codex_cli", redactedPkg, providerPayload, intent, "test", "test")
+	original := srv.enqueueSubmitJob("codex_cli", redactedPkg, "", providerPayload, intent, "test", "test")
 	_ = waitForAttemptStatus(t, srv, cfg.ControlToken, original.AttemptID, "submitted", 3*time.Second)
 
 	nextWorkspace := filepath.Join(t.TempDir(), "rerun-workspace")
@@ -5048,7 +5070,7 @@ func TestExtensionSessionIncludesRerunAttemptsFromMainUI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("preview provider payload: %v", err)
 	}
-	original := srv.enqueueSubmitJob("codex_cli", redactedPkg, providerPayload, intent, "test", "test")
+	original := srv.enqueueSubmitJob("codex_cli", redactedPkg, "", providerPayload, intent, "test", "test")
 	_ = waitForAttemptStatus(t, srv, cfg.ControlToken, original.AttemptID, "submitted", 3*time.Second)
 
 	rerunReq := httptest.NewRequest(http.MethodPost, "/api/session/attempt/rerun", bytes.NewReader([]byte(`{"attempt_id":"`+original.AttemptID+`"}`)))
@@ -5689,6 +5711,359 @@ func TestExtensionPairingPersistsAcrossServerRestart(t *testing.T) {
 	srv.httpSrv.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected restored extension token to authenticate, got %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestManagedExtensionTokenEndpointReusesTokenAndDoesNotLeakOnGET(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/extension/managed-token", nil)
+	addAuth(getReq, cfg.ControlToken, false, "")
+	getRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected initial metadata request to succeed, got %d %s", getRec.Code, getRec.Body.String())
+	}
+	var initial map[string]any
+	if err := json.Unmarshal(getRec.Body.Bytes(), &initial); err != nil {
+		t.Fatalf("decode initial managed token metadata: %v", err)
+	}
+	if available, _ := initial["available"].(bool); available {
+		t.Fatalf("expected no managed token before ensure, got %#v", initial)
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/extension/managed-token?reveal=1", bytes.NewReader([]byte(`{}`)))
+	createReq.Header.Set("Content-Type", "application/json")
+	addAuth(createReq, cfg.ControlToken, true, "nonce-managed-token-create")
+	createRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusOK {
+		t.Fatalf("expected managed token create to succeed, got %d %s", createRec.Code, createRec.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode managed token create response: %v", err)
+	}
+	token, _ := created["token"].(string)
+	if token == "" {
+		t.Fatalf("expected revealed managed token, got %#v", created)
+	}
+	if reused, _ := created["reused"].(bool); reused {
+		t.Fatalf("expected first managed token create to report reused=false")
+	}
+	if got := created["token_source"]; got != managedTokenSourceMCP {
+		t.Fatalf("expected managed token source %q, got %#v", managedTokenSourceMCP, got)
+	}
+
+	revealWithGetReq := httptest.NewRequest(http.MethodGet, "/api/extension/managed-token?reveal=1", nil)
+	addAuth(revealWithGetReq, cfg.ControlToken, false, "")
+	revealWithGetRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(revealWithGetRec, revealWithGetReq)
+	if revealWithGetRec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected GET reveal to be rejected, got %d %s", revealWithGetRec.Code, revealWithGetRec.Body.String())
+	}
+
+	metadataReq := httptest.NewRequest(http.MethodGet, "/api/extension/managed-token", nil)
+	addAuth(metadataReq, cfg.ControlToken, false, "")
+	metadataRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(metadataRec, metadataReq)
+	if metadataRec.Code != http.StatusOK {
+		t.Fatalf("expected managed token metadata request to succeed, got %d %s", metadataRec.Code, metadataRec.Body.String())
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(metadataRec.Body.Bytes(), &metadata); err != nil {
+		t.Fatalf("decode managed token metadata response: %v", err)
+	}
+	if _, ok := metadata["token"]; ok {
+		t.Fatalf("did not expect raw token in GET metadata response: %#v", metadata)
+	}
+	if available, _ := metadata["available"].(bool); !available {
+		t.Fatalf("expected managed token metadata to report available, got %#v", metadata)
+	}
+
+	reuseReq := httptest.NewRequest(http.MethodPost, "/api/extension/managed-token?reveal=1", bytes.NewReader([]byte(`{}`)))
+	reuseReq.Header.Set("Content-Type", "application/json")
+	addAuth(reuseReq, cfg.ControlToken, true, "nonce-managed-token-reuse")
+	reuseRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(reuseRec, reuseReq)
+	if reuseRec.Code != http.StatusOK {
+		t.Fatalf("expected managed token reuse to succeed, got %d %s", reuseRec.Code, reuseRec.Body.String())
+	}
+	var reused map[string]any
+	if err := json.Unmarshal(reuseRec.Body.Bytes(), &reused); err != nil {
+		t.Fatalf("decode managed token reuse response: %v", err)
+	}
+	if got := reused["token"]; got != token {
+		t.Fatalf("expected managed token reuse to return same token, got %#v", got)
+	}
+	if reusedFlag, _ := reused["reused"].(bool); !reusedFlag {
+		t.Fatalf("expected second managed token reveal to report reused=true")
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/mcp/status", nil)
+	addAuth(statusReq, cfg.ControlToken, false, "")
+	statusRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("expected mcp status to succeed, got %d %s", statusRec.Code, statusRec.Body.String())
+	}
+	var status map[string]any
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode mcp status response: %v", err)
+	}
+	tokenState, _ := status["managed_extension_token"].(map[string]any)
+	if _, ok := tokenState["token"]; ok {
+		t.Fatalf("did not expect raw managed token in mcp status response: %#v", tokenState)
+	}
+	if available, _ := tokenState["available"].(bool); !available {
+		t.Fatalf("expected mcp status to report available managed token, got %#v", tokenState)
+	}
+	daemonInstance, _ := status["daemon_instance"].(map[string]any)
+	if daemonInstance["daemon_instance_mode"] != daemonInstanceModeNormal {
+		t.Fatalf("expected mcp status to expose daemon instance mode, got %#v", daemonInstance)
+	}
+	if daemonInstance["default_execution_mode"] != executionModeDirect {
+		t.Fatalf("expected mcp status to expose default execution mode, got %#v", daemonInstance)
+	}
+}
+
+func TestExtensionSessionIncludesManagedTokenAndWorkerDiagnostics(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+	srv.updateRuntimeState(func(state *operatorstate.State) {
+		state.RuntimeCodex.DefaultExecutionMode = executionModeWorker
+	})
+	srv.registerSubmitWorker("worker-a", []string{"codex_cli"}, "knit_mcp", "Worker A")
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/extension/managed-token?reveal=1", bytes.NewReader([]byte(`{}`)))
+	createReq.Header.Set("Content-Type", "application/json")
+	addAuth(createReq, cfg.ControlToken, true, "nonce-managed-token-session")
+	createRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusOK {
+		t.Fatalf("expected managed token create to succeed, got %d %s", createRec.Code, createRec.Body.String())
+	}
+	var created map[string]any
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode managed token create response: %v", err)
+	}
+	token, _ := created["token"].(string)
+	if token == "" {
+		t.Fatalf("expected managed token")
+	}
+
+	sessionReq := httptest.NewRequest(http.MethodGet, "/api/extension/session", nil)
+	addBearerAuth(sessionReq, token, false, "")
+	sessionRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(sessionRec, sessionReq)
+	if sessionRec.Code != http.StatusOK {
+		t.Fatalf("expected extension session request to succeed, got %d %s", sessionRec.Code, sessionRec.Body.String())
+	}
+	var payload extensionSessionState
+	if err := json.Unmarshal(sessionRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode extension session payload: %v", err)
+	}
+	if got := payload.RuntimeCodex["default_execution_mode"]; got != executionModeWorker {
+		t.Fatalf("expected extension session runtime codex to expose worker default mode, got %#v", got)
+	}
+	daemonInstance, _ := payload.DaemonInstance.(map[string]any)
+	if daemonInstance["daemon_instance_mode"] != daemonInstanceModeNormal {
+		t.Fatalf("expected extension session to expose daemon instance metadata, got %#v", payload.DaemonInstance)
+	}
+	if available, _ := payload.ManagedToken["available"].(bool); !available {
+		t.Fatalf("expected extension session to expose managed token setup state, got %#v", payload.ManagedToken)
+	}
+	if _, ok := payload.ManagedToken["token"]; ok {
+		t.Fatalf("did not expect raw managed token in extension session payload: %#v", payload.ManagedToken)
+	}
+	if connected, _ := payload.WorkerState["connected"].(float64); connected != 1 {
+		t.Fatalf("expected extension session to expose connected worker count, got %#v", payload.WorkerState)
+	}
+	if online, _ := payload.WorkerState["online"].(float64); online != 1 {
+		t.Fatalf("expected extension session to expose online worker count, got %#v", payload.WorkerState)
+	}
+	if idle, _ := payload.WorkerState["idle"].(float64); idle != 1 {
+		t.Fatalf("expected extension session to expose idle worker count, got %#v", payload.WorkerState)
+	}
+}
+
+func TestMCPWorkerRequestLifecycleEndpoints(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+	srv.agents = agents.NewRegistry(&fakeQueueAdapter{name: "codex_cli"}, &fakeQueueAdapter{name: "claude_cli"})
+
+	srv.sessions.Start("Browser Preview", "https://example.com")
+	if _, err := srv.sessions.AddFeedback(session.FeedbackEvt{RawTranscript: "worker request", NormalizedText: "worker request"}); err != nil {
+		t.Fatalf("add feedback: %v", err)
+	}
+	if _, err := srv.sessions.Approve(""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+
+	submitReq := httptest.NewRequest(http.MethodPost, "/api/session/submit", bytes.NewReader([]byte(`{"provider":"codex_cli","execution_mode":"mcp_worker"}`)))
+	submitReq.Header.Set("Content-Type", "application/json")
+	addAuth(submitReq, cfg.ControlToken, true, "nonce-mcp-worker-submit")
+	submitRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(submitRec, submitReq)
+	if submitRec.Code != http.StatusAccepted {
+		t.Fatalf("expected worker-mode submit to succeed, got %d %s", submitRec.Code, submitRec.Body.String())
+	}
+	var submitPayload map[string]any
+	if err := json.Unmarshal(submitRec.Body.Bytes(), &submitPayload); err != nil {
+		t.Fatalf("decode submit payload: %v", err)
+	}
+	attemptID, _ := submitPayload["attempt_id"].(string)
+	if attemptID == "" {
+		t.Fatalf("expected attempt id in submit response")
+	}
+	if got := submitPayload["execution_mode"]; got != executionModeWorker {
+		t.Fatalf("expected worker execution mode in submit response, got %#v", got)
+	}
+	submitQueue, _ := submitPayload["submit_queue_state"].(map[string]any)
+	warnings, _ := submitQueue["warnings"].([]any)
+	if len(warnings) != 1 {
+		t.Fatalf("expected queued worker warning in submit queue state, got %#v", submitQueue)
+	}
+	warning, _ := warnings[0].(map[string]any)
+	if warning["code"] != queueCodeWorkerNotConnected {
+		t.Fatalf("expected worker-not-connected warning code, got %#v", warning)
+	}
+
+	waitWithoutWorkerReq := httptest.NewRequest(http.MethodPost, "/api/mcp/request/wait?timeout_seconds=0", bytes.NewReader([]byte(`{}`)))
+	waitWithoutWorkerReq.Header.Set("Content-Type", "application/json")
+	addAuth(waitWithoutWorkerReq, cfg.ControlToken, true, "nonce-mcp-worker-wait-missing")
+	waitWithoutWorkerRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(waitWithoutWorkerRec, waitWithoutWorkerReq)
+	if waitWithoutWorkerRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected missing worker wait request to fail, got %d %s", waitWithoutWorkerRec.Code, waitWithoutWorkerRec.Body.String())
+	}
+	var waitWithoutWorker map[string]any
+	if err := json.Unmarshal(waitWithoutWorkerRec.Body.Bytes(), &waitWithoutWorker); err != nil {
+		t.Fatalf("decode missing worker wait response: %v", err)
+	}
+	if waitWithoutWorker["code"] != queueCodeWorkerNotConnected {
+		t.Fatalf("expected worker-not-connected code, got %#v", waitWithoutWorker)
+	}
+
+	connectReq := httptest.NewRequest(http.MethodPost, "/api/mcp/worker/connect", bytes.NewReader([]byte(`{"worker_id":"worker-a","providers":["codex_cli"],"source":"knit_mcp","label":"Worker A"}`)))
+	connectReq.Header.Set("Content-Type", "application/json")
+	addAuth(connectReq, cfg.ControlToken, true, "nonce-mcp-worker-connect")
+	connectRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(connectRec, connectReq)
+	if connectRec.Code != http.StatusOK {
+		t.Fatalf("expected worker connect to succeed, got %d %s", connectRec.Code, connectRec.Body.String())
+	}
+	var connected map[string]any
+	if err := json.Unmarshal(connectRec.Body.Bytes(), &connected); err != nil {
+		t.Fatalf("decode worker connect response: %v", err)
+	}
+	worker, _ := connected["worker"].(map[string]any)
+	if worker["status"] != workerStatusOnline {
+		t.Fatalf("expected connected worker to be online, got %#v", worker)
+	}
+
+	heartbeatReq := httptest.NewRequest(http.MethodPost, "/api/mcp/worker/heartbeat", bytes.NewReader([]byte(`{"worker_id":"worker-a"}`)))
+	heartbeatReq.Header.Set("Content-Type", "application/json")
+	addAuth(heartbeatReq, cfg.ControlToken, true, "nonce-mcp-worker-heartbeat")
+	heartbeatRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(heartbeatRec, heartbeatReq)
+	if heartbeatRec.Code != http.StatusOK {
+		t.Fatalf("expected worker heartbeat to succeed, got %d %s", heartbeatRec.Code, heartbeatRec.Body.String())
+	}
+
+	waitReq := httptest.NewRequest(http.MethodPost, "/api/mcp/request/wait?timeout_seconds=0", bytes.NewReader([]byte(`{"worker_id":"worker-a"}`)))
+	waitReq.Header.Set("Content-Type", "application/json")
+	addAuth(waitReq, cfg.ControlToken, true, "nonce-mcp-worker-wait")
+	waitRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(waitRec, waitReq)
+	if waitRec.Code != http.StatusOK {
+		t.Fatalf("expected wait_for_request to succeed, got %d %s", waitRec.Code, waitRec.Body.String())
+	}
+	var waited map[string]any
+	if err := json.Unmarshal(waitRec.Body.Bytes(), &waited); err != nil {
+		t.Fatalf("decode wait response: %v", err)
+	}
+	if found, _ := waited["found"].(bool); !found {
+		t.Fatalf("expected wait response to return queued worker request, got %#v", waited)
+	}
+	if got := waited["attempt_id"]; got != attemptID {
+		t.Fatalf("expected wait response attempt %q, got %#v", attemptID, got)
+	}
+
+	conflictWorkerReq := httptest.NewRequest(http.MethodPost, "/api/mcp/worker/connect", bytes.NewReader([]byte(`{"worker_id":"worker-b","providers":["codex_cli"],"source":"knit_mcp","label":"Worker B"}`)))
+	conflictWorkerReq.Header.Set("Content-Type", "application/json")
+	addAuth(conflictWorkerReq, cfg.ControlToken, true, "nonce-mcp-worker-connect-b")
+	conflictWorkerRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(conflictWorkerRec, conflictWorkerReq)
+	if conflictWorkerRec.Code != http.StatusOK {
+		t.Fatalf("expected second worker connect to succeed, got %d %s", conflictWorkerRec.Code, conflictWorkerRec.Body.String())
+	}
+
+	claimReq := httptest.NewRequest(http.MethodPost, "/api/mcp/request/claim", bytes.NewReader([]byte(`{"worker_id":"worker-a","attempt_id":"`+attemptID+`"}`)))
+	claimReq.Header.Set("Content-Type", "application/json")
+	addAuth(claimReq, cfg.ControlToken, true, "nonce-mcp-worker-claim")
+	claimRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(claimRec, claimReq)
+	if claimRec.Code != http.StatusOK {
+		t.Fatalf("expected claim_request to succeed, got %d %s", claimRec.Code, claimRec.Body.String())
+	}
+
+	conflictReq := httptest.NewRequest(http.MethodPost, "/api/mcp/request/claim", bytes.NewReader([]byte(`{"worker_id":"worker-b","attempt_id":"`+attemptID+`"}`)))
+	conflictReq.Header.Set("Content-Type", "application/json")
+	addAuth(conflictReq, cfg.ControlToken, true, "nonce-mcp-worker-claim-conflict")
+	conflictRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(conflictRec, conflictReq)
+	if conflictRec.Code != http.StatusConflict {
+		t.Fatalf("expected second worker claim to conflict, got %d %s", conflictRec.Code, conflictRec.Body.String())
+	}
+	var conflict map[string]any
+	if err := json.Unmarshal(conflictRec.Body.Bytes(), &conflict); err != nil {
+		t.Fatalf("decode claim conflict response: %v", err)
+	}
+	if conflict["code"] != queueCodeClaimConflict {
+		t.Fatalf("expected claim conflict code, got %#v", conflict)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/mcp/request/get?worker_id=worker-a&attempt_id="+url.QueryEscape(attemptID), nil)
+	addAuth(getReq, cfg.ControlToken, false, "")
+	getRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("expected get_request to succeed, got %d %s", getRec.Code, getRec.Body.String())
+	}
+	var getPayload map[string]any
+	if err := json.Unmarshal(getRec.Body.Bytes(), &getPayload); err != nil {
+		t.Fatalf("decode get_request payload: %v", err)
+	}
+	if got := getPayload["provider"]; got != "codex_cli" {
+		t.Fatalf("expected provider codex_cli, got %#v", got)
+	}
+
+	completeReq := httptest.NewRequest(http.MethodPost, "/api/mcp/request/complete", bytes.NewReader([]byte(`{"worker_id":"worker-a","attempt_id":"`+attemptID+`","summary":"Finished from MCP","ref":"worker-ref-1"}`)))
+	completeReq.Header.Set("Content-Type", "application/json")
+	addAuth(completeReq, cfg.ControlToken, true, "nonce-mcp-worker-complete")
+	completeRec := httptest.NewRecorder()
+	srv.httpSrv.Handler.ServeHTTP(completeRec, completeReq)
+	if completeRec.Code != http.StatusOK {
+		t.Fatalf("expected complete_request to succeed, got %d %s", completeRec.Code, completeRec.Body.String())
+	}
+
+	attempt := waitForAttemptStatus(t, srv, cfg.ControlToken, attemptID, "submitted", 3*time.Second)
+	if got := attempt["agent_summary"]; got != "Finished from MCP" {
+		t.Fatalf("expected agent summary from worker completion, got %#v", got)
+	}
+	if got := attempt["ref"]; got != "worker-ref-1" {
+		t.Fatalf("expected completion ref to persist, got %#v", got)
+	}
+	if got := attempt["execution_mode"]; got != executionModeWorker {
+		t.Fatalf("expected submitted attempt to retain worker execution mode, got %#v", got)
+	}
+	if got, ok := attempt["state_code"]; ok && got != "" {
+		t.Fatalf("expected completed attempt to clear active state code, got %#v", got)
 	}
 }
 

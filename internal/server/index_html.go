@@ -1171,8 +1171,12 @@ const indexHTML = `<!doctype html>
             <h3 class="capture-option-title">Chrome Extension</h3>
             <p class="capture-option-copy">Pair the browser extension and work from the page you are reviewing without bouncing back to the main UI.</p>
             <div style="display:grid;gap:.45rem;justify-items:start;">
-              <button class="secondary toolbar-button" onclick="startExtensionPairing()" title="Generate a browser extension pairing code">⌁ <span>Generate extension token</span></button>
+              <button class="secondary toolbar-button" onclick="startExtensionPairing()" title="Generate a browser extension pairing code">⌁ <span>Generate pairing code</span></button>
               <code id="extensionPairingCodeState" class="capture-option-code">No active pairing code.</code>
+              <div style="display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;">
+                <button id="copyManagedExtensionTokenBtn" class="secondary toolbar-button" onclick="copyManagedExtensionToken()" title="Copy the current browser extension token">⧉ <span>Copy browser token</span></button>
+                <code id="managedExtensionTokenState" class="capture-option-code">No managed browser token yet.</code>
+              </div>
             </div>
           </section>
           <section id="captureOptionComposer" class="capture-option-card">
@@ -1654,6 +1658,13 @@ const indexHTML = `<!doctype html>
             <input id="codexOutputDir" placeholder="/tmp" style="min-width:180px;" maxlength="1024" spellcheck="false" />
           </label>
           <label class="field">
+            <span class="field-label">Default execution mode</span>
+            <select id="defaultExecutionMode">
+              <option value="direct_exec">direct_exec</option>
+              <option value="mcp_worker">mcp_worker</option>
+            </select>
+          </label>
+          <label class="field">
             <span class="field-label">Submit mode</span>
             <select id="submitExecutionMode">
               <option value="series">series (default)</option>
@@ -1817,6 +1828,7 @@ const allowLargeInlineMediaEl = document.getElementById('allowLargeInlineMedia')
 const screenshotMode = document.getElementById('screenshotMode');
 const capturePerfStateEl = document.getElementById('capturePerfState');
 const agentDefaultProviderEl = document.getElementById('agentDefaultProvider');
+const defaultExecutionModeEl = document.getElementById('defaultExecutionMode');
 const deliveryIntentProfileEl = document.getElementById('deliveryIntentProfile');
 const deliveryInstructionTextEl = document.getElementById('deliveryInstructionText');
 const previewBtnEl = document.getElementById('previewBtn');
@@ -1831,6 +1843,8 @@ const captureInputValuesToggleEl = document.getElementById('captureInputValuesTo
 const liveSubmitLogEl = document.getElementById('liveSubmitLog');
 const liveSubmitCommentaryEl = document.getElementById('liveSubmitCommentary');
 const configExportEl = document.getElementById('configExport');
+const managedExtensionTokenStateEl = document.getElementById('managedExtensionTokenState');
+const copyManagedExtensionTokenBtnEl = document.getElementById('copyManagedExtensionTokenBtn');
 const configProfileEl = document.getElementById('configProfile');
 const applyProfileBtn = document.getElementById('save');
 const configLockStatusEl = document.getElementById('configLockStatus');
@@ -2175,15 +2189,15 @@ function submitAttemptToastMessage(attempt) {
 }
 
 function submitAttemptOutcomeTitle(attempt) {
-  return String(attempt?.outcome_title || '').trim();
+  return String(attempt?.outcome_title || attempt?.state_code || '').trim();
 }
 
 function submitAttemptOutcomeMessage(attempt) {
-  return String(attempt?.outcome_message || '').trim();
+  return String(attempt?.outcome_message || attempt?.state_message || '').trim();
 }
 
 function submitAttemptNeedsAttention(attempt) {
-  return String(attempt?.outcome_code || '').trim().length > 0;
+  return String(attempt?.outcome_code || attempt?.state_code || '').trim().length > 0;
 }
 
 function submitAttemptOutcomeToastMessage(attempt) {
@@ -2306,6 +2320,7 @@ function initPersistentSettings() {
   }
   bindPersistedField(workspaceDirEl, 'workspace_dir');
   bindPersistedField(agentDefaultProviderEl, 'default_provider');
+  bindPersistedField(defaultExecutionModeEl, 'default_execution_mode');
   bindPersistedField(codexCliCmdEl, 'cli_adapter_cmd');
   bindPersistedField(claudeCliCmdEl, 'claude_cli_adapter_cmd');
   bindPersistedField(opencodeCliCmdEl, 'opencode_cli_adapter_cmd');
@@ -3212,6 +3227,8 @@ function submitAttemptOutputText(attempt) {
   const status = String(attempt.status || '');
   const error = String(attempt.error || '').trim();
   if (error) return 'Error: ' + error;
+  const stateMessage = String(attempt.state_message || '').trim();
+  if (stateMessage && status !== 'in_progress') return stateMessage;
   if (looksLikeLocalAttemptLogRef(attemptLogRef(attempt))) return 'Loading adapter output...';
   const ref = String(attempt.ref || '').trim();
   if (ref) return 'Result reference: ' + ref;
@@ -3363,6 +3380,7 @@ function renderSubmitAttemptHistoryCard(attempt, index = 0) {
   const provider = String(attempt?.provider || 'agent');
   const destination = providerDestinationLabel(provider);
   const mode = String(attempt?.mode || 'series');
+  const executionMode = String(attempt?.execution_mode || 'direct_exec');
   const when = submitAttemptWhen(attempt);
   const request = requestPreviewText(attempt) || 'No request preview captured.';
   const retry = Number(attempt?.retry_count || 0);
@@ -3397,7 +3415,7 @@ function renderSubmitAttemptHistoryCard(attempt, index = 0) {
         submitAttemptOutcomeListItem(attempt) +
         submitAttemptWorkspaceListItem(attempt) +
         renderSubmitAttemptOutput(attempt) +
-        '<li><strong>Details:</strong> ' + escapePreviewHTML(id) + ' • ' + escapePreviewHTML(mode) + ' mode • retry ' + retry + '/' + maxAttempts + (wait > 0 ? ' • waited ' + wait + 'ms' : '') + '</li>' +
+        '<li><strong>Details:</strong> ' + escapePreviewHTML(id) + ' • ' + escapePreviewHTML(executionMode) + ' exec • ' + escapePreviewHTML(mode) + ' submit mode • retry ' + retry + '/' + maxAttempts + (wait > 0 ? ' • waited ' + wait + 'ms' : '') + '</li>' +
         (lastUpdate ? '<li><strong>Latest update:</strong> ' + escapePreviewHTML(lastUpdate) + '</li>' : '') +
       '</ul>' +
       '<details data-submit-attempt-raw-json>' +
@@ -3410,6 +3428,21 @@ function renderSubmitAttemptHistoryCard(attempt, index = 0) {
 
 function renderQueueStateCard(mode, running, queued, postSubmitRunning, attempts) {
   if (!queueStateEl) return;
+  const queue = currentState?.submit_queue || {};
+  const defaultExecutionMode = String(queue.default_execution_mode || currentState?.runtime_codex?.default_execution_mode || 'direct_exec');
+  const workerState = queue.worker_connectivity || currentState?.worker_connectivity || {};
+  const workerConnected = Number(workerState.connected || 0);
+  const workerProviders = Array.isArray(workerState.providers) ? workerState.providers : [];
+  const workerOnline = Number(workerState.online || workerConnected || 0);
+  const workerBusy = Number(workerState.busy || 0);
+  const workerIdle = Number(workerState.idle || 0);
+  const workerStale = Number(workerState.stale || 0);
+  const workerOffline = Number(workerState.offline || 0);
+  const queueWarnings = Array.isArray(queue.warnings) ? queue.warnings : [];
+  const directQueued = Number(queue.direct_exec_queued || 0);
+  const directRunning = Number(queue.direct_exec_running || 0);
+  const workerQueued = Number(queue.mcp_worker_queued || 0);
+  const workerClaimed = Number(queue.mcp_worker_claimed || 0);
   const runningAttempts = attempts.filter(a => String(a?.status || '') === 'in_progress').slice(0, 3);
   const waitingAttempts = attempts.filter(a => {
     const status = String(a?.status || '');
@@ -3417,6 +3450,23 @@ function renderQueueStateCard(mode, running, queued, postSubmitRunning, attempts
   }).slice(0, 3);
   let html = '<div><strong>' + running + '</strong> running • <strong>' + queued + '</strong> waiting • ' + escapePreviewHTML(mode) + ' mode' +
     (postSubmitRunning ? ' • rebuild/check running' : '') + '</div>';
+  html += '<ul class="status-list">' +
+    '<li><strong>Default execution:</strong> ' + escapePreviewHTML(defaultExecutionMode) + '</li>' +
+    '<li><strong>Direct exec:</strong> ' + directRunning + ' running • ' + directQueued + ' waiting</li>' +
+    '<li><strong>MCP worker:</strong> ' + workerClaimed + ' claimed • ' + workerQueued + ' queued</li>' +
+    '<li><strong>Worker sessions:</strong> ' + workerOnline + ' online • ' + workerBusy + ' busy • ' + workerIdle + ' idle • ' + workerStale + ' stale • ' + workerOffline + ' offline' + (workerProviders.length ? ' • ' + escapePreviewHTML(workerProviders.join(', ')) : '') + '</li>' +
+    '</ul>';
+  if (queueWarnings.length) {
+    html += queueWarnings.map(item => '<div class="empty-tone"><strong>' + escapePreviewHTML(String(item?.code || 'warning')) + ':</strong> ' + escapePreviewHTML(String(item?.message || '')) + '</div>').join('');
+  } else if (defaultExecutionMode === 'mcp_worker' && workerQueued > 0) {
+    if (workerBusy > 0) {
+      html += '<div class="empty-tone">A worker session is connected and busy. Queued requests are waiting for claim.</div>';
+    } else if (workerIdle > 0) {
+      html += '<div class="empty-tone">A compatible worker session is connected and idle. Queued requests are waiting for claim.</div>';
+    } else {
+      html += '<div class="empty-tone">Queued worker requests are waiting for a compatible worker session.</div>';
+    }
+  }
   if (runningAttempts.length) {
     html += '<ul class="status-list">' + runningAttempts.map(a =>
       '<li><strong>Running:</strong> ' + escapePreviewHTML(providerDestinationLabel(a.provider || 'agent')) +
@@ -3943,6 +3993,48 @@ function renderExtensionPairings() {
   }).join('');
 }
 
+function renderManagedExtensionTokenState() {
+  if (!managedExtensionTokenStateEl) return;
+  const state = currentState?.managed_extension_token || {};
+  const available = !!state?.available;
+  const source = String(state?.token_source || '').trim();
+  const sourceLabel = source === 'mcp_worker'
+    ? 'from knit mcp'
+    : (source ? source.replaceAll('_', ' ') : '');
+  const reused = state?.last_used_at ? ('Last used ' + new Date(state.last_used_at).toLocaleString()) : 'Ready to copy for the browser extension.';
+  managedExtensionTokenStateEl.textContent = available
+    ? ('Browser token ready' + (sourceLabel ? ' · ' + sourceLabel : '') + ' · ' + reused)
+    : 'No managed browser token yet.';
+  if (copyManagedExtensionTokenBtnEl) {
+    copyManagedExtensionTokenBtnEl.disabled = !available;
+  }
+}
+
+async function copyManagedExtensionToken() {
+  try {
+    const res = await fetch('/api/extension/managed-token?reveal=1', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(true),
+      },
+      body: JSON.stringify({}),
+    });
+    const txt = await res.text();
+    if (!res.ok) throw new Error(txt || ('HTTP ' + res.status));
+    const data = txt ? JSON.parse(txt) : {};
+    const token = String(data?.token || '').trim();
+    if (!token) throw new Error('Managed token unavailable.');
+    await navigator.clipboard.writeText(token);
+    currentState = currentState || {};
+    currentState.managed_extension_token = data;
+    renderManagedExtensionTokenState();
+    showToast('Browser extension token copied');
+  } catch (err) {
+    showToast('Could not copy browser extension token: ' + err.message, true);
+  }
+}
+
 async function startExtensionPairing() {
   try {
     const data = await post('/api/extension/pair/start', { name: 'Chromium Popup', browser: 'chromium' });
@@ -4413,6 +4505,7 @@ async function refresh() {
     syncSTTRuntimeUIFromState();
     syncEnhancementUIFromState();
     renderExtensionPairings();
+    renderManagedExtensionTokenState();
     renderSessionTransportControls();
     renderSensitiveCaptureBadges();
     capturePolicyEl.textContent = JSON.stringify({
@@ -4440,6 +4533,7 @@ async function refresh() {
     preservingRuntimeDraft = codexRuntimeDirty || codexRuntimeApplying;
     codexRuntimeStateEl.textContent = JSON.stringify(rc, null, 2);
     if (agentDefaultProviderEl && !preservingRuntimeDraft) agentDefaultProviderEl.value = rc.default_provider || agentDefaultProviderEl.value || 'codex_cli';
+    if (defaultExecutionModeEl && !preservingRuntimeDraft) defaultExecutionModeEl.value = rc.default_execution_mode || defaultExecutionModeEl.value || 'direct_exec';
     if (videoModeEl) videoModeEl.value = currentState.video_mode || videoModeEl.value || 'event_triggered';
     if (!preservingRuntimeDraft) codexCliCmdEl.value = rc.cli_adapter_cmd || codexCliCmdEl.value || '';
     if (claudeCliCmdEl && !preservingRuntimeDraft) claudeCliCmdEl.value = rc.claude_cli_adapter_cmd || claudeCliCmdEl.value || '';
@@ -6397,7 +6491,8 @@ async function submitSession() {
     setSubmitProgress(false, 'Queued: ' + (attemptId || 'submission') + (queuePos > 0 ? (' (position ' + queuePos + ')') : ''));
     const destination = providerDestinationLabel(provider);
     logNote('Submission queued to ' + destination + ' as ' + (attemptId || 'attempt') + ' (' + status + ', action "' + intentLabel + '").');
-    showToast('Request submitted to ' + destination + ' for "' + intentLabel + '"' + (attemptId ? (' as ' + attemptId) : '.'));
+    const executionMode = String(data.execution_mode || '').trim();
+    showToast((executionMode === 'mcp_worker' ? 'Request queued for worker via ' : 'Request submitted to ') + destination + ' for "' + intentLabel + '"' + (attemptId ? (' as ' + attemptId) : '.'));
     resetPreviewDeliveryOptions();
   } catch (err) {
     const msg = String(err.message || '');
@@ -6499,6 +6594,7 @@ async function applyCodexRuntime() {
     const deliveryPromptPayload = currentDeliveryPromptPayload();
     const payload = {
       default_provider: selectedProvider(),
+      default_execution_mode: defaultExecutionModeEl?.value || 'direct_exec',
       cli_adapter_cmd: readRuntimeSingleLine(codexCliCmdEl, 'Codex CLI command'),
       cli_timeout_seconds: timeoutSeconds,
       claude_cli_adapter_cmd: readRuntimeSingleLine(claudeCliCmdEl, 'Claude CLI command'),
@@ -6533,6 +6629,7 @@ async function applyCodexRuntime() {
     codexWorkdirLabelEl.textContent = payload.codex_workdir || '(not set)';
     codexRuntimeDirty = false;
     setUISetting('default_provider', payload.default_provider || '');
+    setUISetting('default_execution_mode', payload.default_execution_mode || 'direct_exec');
     setUISetting('cli_adapter_cmd', payload.cli_adapter_cmd || '');
     setUISetting('claude_cli_adapter_cmd', payload.claude_cli_adapter_cmd || '');
     setUISetting('opencode_cli_adapter_cmd', payload.opencode_cli_adapter_cmd || '');
@@ -6752,6 +6849,9 @@ if (codexOutputDirEl) {
 }
 if (submitExecutionModeEl) {
   submitExecutionModeEl.addEventListener('change', scheduleCodexRuntimeApply);
+}
+if (defaultExecutionModeEl) {
+  defaultExecutionModeEl.addEventListener('change', scheduleCodexRuntimeApply);
 }
 if (codexSandboxEl) {
   codexSandboxEl.addEventListener('change', scheduleCodexRuntimeApply);

@@ -51,12 +51,15 @@ type extensionPairingPublic struct {
 
 type extensionSessionState struct {
 	Session         any                      `json:"session"`
+	DaemonInstance  any                      `json:"daemon_instance,omitempty"`
 	RuntimePlatform any                      `json:"runtime_platform"`
 	PlatformProfile any                      `json:"platform_profile"`
 	RuntimeCodex    map[string]any           `json:"runtime_codex"`
 	SubmitQueue     map[string]any           `json:"submit_queue"`
 	SubmitAttempts  []submitAttempt          `json:"submit_attempts"`
 	SubmitRecovery  []string                 `json:"submit_recovery_notices,omitempty"`
+	WorkerState     map[string]any           `json:"worker_state,omitempty"`
+	ManagedToken    map[string]any           `json:"managed_extension_token,omitempty"`
 	SensitiveBadges map[string]string        `json:"sensitive_badges"`
 	Extensions      []extensionPairingPublic `json:"extensions,omitempty"`
 }
@@ -220,6 +223,9 @@ func (s *Server) extensionPairingsPublic() []extensionPairingPublic {
 	}
 	out := make([]extensionPairingPublic, 0, len(s.runtime.Extensions.Pairings))
 	for _, pairing := range s.runtime.Extensions.Pairings {
+		if strings.TrimSpace(pairing.TokenSource) == managedTokenSourceMCP {
+			continue
+		}
 		out = append(out, extensionPairingPublic{
 			ID:           pairing.ID,
 			Name:         pairing.Name,
@@ -239,15 +245,19 @@ func (s *Server) extensionSessionPayload() extensionSessionState {
 	runtimeCodex := s.runtimeAgentState()
 	return extensionSessionState{
 		Session:         s.sessions.Current(),
+		DaemonInstance:  s.daemonInstanceState(),
 		RuntimePlatform: platform.CurrentRuntimeGuide(),
 		PlatformProfile: platform.CurrentProfile(),
 		RuntimeCodex: map[string]any{
-			"default_provider":    runtimeCodex["default_provider"],
-			"available_providers": runtimeCodex["available_providers"],
+			"default_provider":       runtimeCodex["default_provider"],
+			"default_execution_mode": runtimeCodex["default_execution_mode"],
+			"available_providers":    runtimeCodex["available_providers"],
 		},
 		SubmitQueue:    s.submitQueueState(),
 		SubmitAttempts: s.submitAttemptsSnapshot(),
 		SubmitRecovery: s.submitRecoveryNotesSnapshot(),
+		WorkerState:    s.workerConnectivityState(),
+		ManagedToken:   s.managedExtensionTokenState(),
 		SensitiveBadges: map[string]string{
 			"typed_values":      previewBoolBadgeLabel(currentSessionCaptureInputValues(s.sessions.Current()), "Typed values on", "Typed values redacted"),
 			"large_media":       previewBoolBadgeLabel(cfg.AllowRemoteSubmission, "Remote send allowed", "Remote send blocked"),

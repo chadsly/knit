@@ -47,6 +47,8 @@ type Server struct {
 	cfg          config.Config
 	runtimeMu    sync.RWMutex
 	runtime      operatorstate.State
+	daemonMode   string
+	daemonID     string
 	nonceMu      sync.Mutex
 	nonces       map[string]time.Time
 	pairMu       sync.Mutex
@@ -60,10 +62,12 @@ type Server struct {
 	submitSeriesCh      chan submitJob
 	submitPending       []submitJob
 	submitRunning       map[string]submitJob
+	submitClaimed       map[string]submitJob
 	submitCancel        map[string]context.CancelFunc
 	submitCanceled      map[string]string
 	submitAttempts      []submitAttempt
 	submitRecoveryNotes []string
+	submitWorkers       map[string]submitWorker
 	parallelPending     int
 	parallelHasSuccess  bool
 	parallelPostRunning bool
@@ -158,6 +162,7 @@ func canonicalPackageHasInput(pkg *session.CanonicalPackage) bool {
 
 type submitRequest struct {
 	Provider              string   `json:"provider"`
+	ExecutionMode         string   `json:"execution_mode,omitempty"`
 	IntentProfile         string   `json:"intent_profile,omitempty"`
 	InstructionText       string   `json:"instruction_text,omitempty"`
 	CustomInstructions    string   `json:"custom_instructions,omitempty"`
@@ -180,6 +185,7 @@ type runtimeTranscriptionRequest struct {
 
 type payloadPreviewRequest struct {
 	Provider              string   `json:"provider"`
+	ExecutionMode         string   `json:"execution_mode,omitempty"`
 	IntentProfile         string   `json:"intent_profile,omitempty"`
 	InstructionText       string   `json:"instruction_text,omitempty"`
 	CustomInstructions    string   `json:"custom_instructions,omitempty"`
@@ -204,6 +210,7 @@ type replaySettingsRequest struct {
 
 type runtimeCodexRequest struct {
 	DefaultProvider         string `json:"default_provider,omitempty"`
+	DefaultExecutionMode    string `json:"default_execution_mode,omitempty"`
 	CLIAdapterCmd           string `json:"cli_adapter_cmd"`
 	CLITimeoutSeconds       *int   `json:"cli_timeout_seconds,omitempty"`
 	ClaudeCLIAdapterCmd     string `json:"claude_cli_adapter_cmd,omitempty"`
@@ -240,6 +247,36 @@ type configImportRequest struct {
 	Config  *config.PublicConfig `json:"config,omitempty"`
 }
 
+type mcpWorkerConnectRequest struct {
+	WorkerID  string   `json:"worker_id"`
+	Label     string   `json:"label,omitempty"`
+	Source    string   `json:"source,omitempty"`
+	Providers []string `json:"providers,omitempty"`
+}
+
+type mcpWorkerActionRequest struct {
+	WorkerID string `json:"worker_id"`
+}
+
+type mcpWorkerClaimRequest struct {
+	WorkerID  string `json:"worker_id"`
+	AttemptID string `json:"attempt_id"`
+}
+
+type mcpWorkerCompleteRequest struct {
+	WorkerID  string `json:"worker_id"`
+	AttemptID string `json:"attempt_id"`
+	Summary   string `json:"summary,omitempty"`
+	Ref       string `json:"ref,omitempty"`
+}
+
+type mcpWorkerFailRequest struct {
+	WorkerID  string `json:"worker_id"`
+	AttemptID string `json:"attempt_id"`
+	Code      string `json:"code,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
 func New(
 	cfg config.Config,
 	sessions *session.Service,
@@ -266,11 +303,18 @@ func New(
 		stt:                 transcriptionProvider,
 		postSubmitRunner:    runPostSubmitAutomation,
 		submitRunning:       map[string]submitJob{},
+		submitClaimed:       map[string]submitJob{},
 		submitCancel:        map[string]context.CancelFunc{},
 		submitCanceled:      map[string]string{},
+		submitWorkers:       map[string]submitWorker{},
 		submitQueuePath:     filepath.Join(cfg.DataDir, "submit_queue.json"),
 		updateHTTPClient:    &http.Client{Timeout: 5 * time.Second},
 		updateReleaseAPIURL: defaultReleaseCheckAPIURL,
+	}
+	s.daemonMode = normalizeDaemonInstanceMode(os.Getenv("KNIT_DAEMON_INSTANCE_MODE"))
+	s.daemonID = strings.TrimSpace(os.Getenv("KNIT_DAEMON_INSTANCE_ID"))
+	if s.daemonID == "" {
+		s.daemonID = fmt.Sprintf("daemon-%d", time.Now().UTC().UnixNano())
 	}
 	if privilegedCapture != nil {
 		s.runtime = operatorstate.Capture(cfg, privilegedCapture.AudioState())
@@ -332,6 +376,16 @@ func New(
 	mux.HandleFunc("/api/extension/pairings", s.handleExtensionPairings)
 	mux.HandleFunc("/api/extension/pair/revoke", s.handleExtensionPairRevoke)
 	mux.HandleFunc("/api/extension/session", s.handleExtensionSession)
+	mux.HandleFunc("/api/extension/managed-token", s.handleManagedExtensionToken)
+	mux.HandleFunc("/api/mcp/status", s.handleMCPStatus)
+	mux.HandleFunc("/api/mcp/worker/connect", s.handleMCPWorkerConnect)
+	mux.HandleFunc("/api/mcp/worker/disconnect", s.handleMCPWorkerDisconnect)
+	mux.HandleFunc("/api/mcp/worker/heartbeat", s.handleMCPWorkerHeartbeat)
+	mux.HandleFunc("/api/mcp/request/wait", s.handleMCPWaitForRequest)
+	mux.HandleFunc("/api/mcp/request/claim", s.handleMCPClaimRequest)
+	mux.HandleFunc("/api/mcp/request/get", s.handleMCPGetRequest)
+	mux.HandleFunc("/api/mcp/request/complete", s.handleMCPCompleteRequest)
+	mux.HandleFunc("/api/mcp/request/fail", s.handleMCPFailRequest)
 	mux.HandleFunc("/api/audit/export", s.handleAuditExport)
 	mux.HandleFunc("/api/audio/devices", s.handleAudioDevices)
 	mux.HandleFunc("/api/audio/config", s.handleAudioConfig)
@@ -514,7 +568,21 @@ func requiredCapability(path, method string) string {
 		return "logs"
 	case "/api/config/export", "/api/extension/pairings":
 		return "config_read"
-	case "/api/extension/pair/start", "/api/extension/pair/revoke":
+	case "/api/extension/managed-token":
+		if method == http.MethodGet {
+			return "config_read"
+		}
+		return "config"
+	case "/api/extension/pair/start", "/api/extension/pair/revoke",
+		"/api/mcp/status",
+		"/api/mcp/worker/connect",
+		"/api/mcp/worker/disconnect",
+		"/api/mcp/worker/heartbeat",
+		"/api/mcp/request/wait",
+		"/api/mcp/request/claim",
+		"/api/mcp/request/get",
+		"/api/mcp/request/complete",
+		"/api/mcp/request/fail":
 		return "config"
 	}
 	if method == http.MethodGet {
@@ -634,15 +702,19 @@ func (s *Server) handleCompanionScript(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	cfg := s.currentConfig()
 	writeJSON(w, map[string]any{
-		"ok":                true,
-		"current_version":   runtimeVersion(cfg),
-		"build_id":          cfg.BuildID,
-		"version_pin":       cfg.VersionPin,
-		"platform_profile":  platform.CurrentProfile(),
-		"runtime_platform":  platform.CurrentRuntimeGuide(),
-		"ui_runtime":        cfg.UIRuntime,
-		"auto_start":        s.autoStart != nil && s.autoStart.Status().Enabled,
-		"integrity_enabled": strings.TrimSpace(os.Getenv("KNIT_BINARY_SHA256")) != "" || strings.TrimSpace(os.Getenv("KNIT_BINARY_CHECKSUMS_FILE")) != "" || strings.TrimSpace(os.Getenv("KNIT_RELEASE_MANIFEST_FILE")) != "",
+		"ok":                     true,
+		"current_version":        runtimeVersion(cfg),
+		"build_id":               cfg.BuildID,
+		"version_pin":            cfg.VersionPin,
+		"platform_profile":       platform.CurrentProfile(),
+		"runtime_platform":       platform.CurrentRuntimeGuide(),
+		"ui_runtime":             cfg.UIRuntime,
+		"auto_start":             s.autoStart != nil && s.autoStart.Status().Enabled,
+		"integrity_enabled":      strings.TrimSpace(os.Getenv("KNIT_BINARY_SHA256")) != "" || strings.TrimSpace(os.Getenv("KNIT_BINARY_CHECKSUMS_FILE")) != "" || strings.TrimSpace(os.Getenv("KNIT_RELEASE_MANIFEST_FILE")) != "",
+		"daemon_instance_mode":   s.daemonInstanceMode(),
+		"daemon_instance_id":     s.daemonInstanceID(),
+		"default_execution_mode": s.defaultExecutionMode(),
+		"mcp_attach_ready":       s.mcpAttachReady(),
 	})
 }
 
@@ -733,6 +805,9 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"runtime_transcription":    s.runtimeTranscriptionState(cfg, sttProvider),
 		"update_check_on_startup":  s.runtime.System.CheckUpdatesOnStartup,
 		"extension_pairings":       s.extensionPairingsPublic(),
+		"managed_extension_token":  s.managedExtensionTokenState(),
+		"worker_connectivity":      s.workerConnectivityState(),
+		"daemon_instance":          s.daemonInstanceState(),
 	})
 }
 
@@ -1620,6 +1695,9 @@ func (s *Server) handlePayloadPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rc := s.currentRuntimeCodex()
+	defaultExecutionMode := s.defaultExecutionMode()
+	executionModeOverride := strings.TrimSpace(req.ExecutionMode)
+	effectiveExecutionMode := normalizeExecutionMode(firstNonEmptyString(executionModeOverride, defaultExecutionMode))
 	intent := agents.NormalizeDeliveryIntent(agents.DeliveryIntent{
 		Profile:            req.IntentProfile,
 		InstructionText:    req.InstructionText,
@@ -1636,9 +1714,12 @@ func (s *Server) handlePayloadPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, payloadPreviewResponse{
-		Provider: req.Provider,
-		Payload:  payload,
-		Preview:  mergePayloadPreviewWarnings(s.buildRenderedPayloadPreview(transmissionPkg, curr, req.Provider, intent), transmissionWarnings),
+		Provider:              req.Provider,
+		ExecutionMode:         effectiveExecutionMode,
+		DefaultExecutionMode:  defaultExecutionMode,
+		ExecutionModeOverride: executionModeOverride,
+		Payload:               payload,
+		Preview:               mergePayloadPreviewWarnings(s.buildRenderedPayloadPreview(transmissionPkg, curr, req.Provider, intent), transmissionWarnings),
 	})
 }
 
@@ -1789,19 +1870,22 @@ func (s *Server) handleSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authCtx := s.requestAuthContext(r)
-	attempt := s.enqueueSubmitJob(req.Provider, redactedPkg, providerPayload, intent, s.requestSource(r), authCtx.Actor)
+	attempt := s.enqueueSubmitJob(req.Provider, redactedPkg, req.ExecutionMode, providerPayload, intent, s.requestSource(r), authCtx.Actor)
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, map[string]any{
-		"attempt_id":         attempt.AttemptID,
-		"provider":           attempt.Provider,
-		"intent_profile":     attempt.IntentProfile,
-		"intent_label":       attempt.IntentLabel,
-		"session_id":         attempt.SessionID,
-		"status":             attempt.Status,
-		"execution_mode":     attempt.Mode,
-		"queue_position":     attempt.QueuePos,
-		"source":             attempt.Source,
-		"submit_queue_state": s.submitQueueState(),
+		"attempt_id":              attempt.AttemptID,
+		"provider":                attempt.Provider,
+		"intent_profile":          attempt.IntentProfile,
+		"intent_label":            attempt.IntentLabel,
+		"session_id":              attempt.SessionID,
+		"status":                  attempt.Status,
+		"execution_mode":          attempt.ExecutionMode,
+		"default_execution_mode":  attempt.DefaultExecutionMode,
+		"execution_mode_override": attempt.ExecutionModeOverride,
+		"submit_execution_mode":   attempt.Mode,
+		"queue_position":          attempt.QueuePos,
+		"source":                  attempt.Source,
+		"submit_queue_state":      s.submitQueueState(),
 	})
 }
 
@@ -2129,6 +2213,7 @@ func (s *Server) runtimeAgentState() map[string]any {
 	adapters := allowedSubmitProviders(s.agents.Names(), s.currentConfig())
 	return map[string]any{
 		"default_provider":             s.resolveProvider(""),
+		"default_execution_mode":       s.defaultExecutionMode(),
 		"available_providers":          adapters,
 		"cli_adapter_cmd":              rc.CLIAdapterCmd,
 		"cli_timeout_seconds":          intString(rc.CLITimeoutSeconds),
@@ -2615,21 +2700,24 @@ func (s *Server) handleRerunSubmitAttempt(w http.ResponseWriter, r *http.Request
 		return
 	}
 	authCtx := s.requestAuthContext(r)
-	attempt := s.enqueueSubmitJob(provider, redactedPkg, providerPayload, intent, s.requestSource(r), authCtx.Actor)
+	attempt := s.enqueueSubmitJob(provider, redactedPkg, original.ExecutionModeOverride, providerPayload, intent, s.requestSource(r), authCtx.Actor)
 	w.WriteHeader(http.StatusAccepted)
 	writeJSON(w, map[string]any{
-		"attempt":            attempt,
-		"attempt_id":         attempt.AttemptID,
-		"provider":           attempt.Provider,
-		"intent_profile":     attempt.IntentProfile,
-		"intent_label":       attempt.IntentLabel,
-		"session_id":         attempt.SessionID,
-		"status":             attempt.Status,
-		"execution_mode":     attempt.Mode,
-		"queue_position":     attempt.QueuePos,
-		"source":             attempt.Source,
-		"submit_queue_state": s.submitQueueState(),
-		"submit_attempts":    s.submitAttemptsSnapshot(),
+		"attempt":                 attempt,
+		"attempt_id":              attempt.AttemptID,
+		"provider":                attempt.Provider,
+		"intent_profile":          attempt.IntentProfile,
+		"intent_label":            attempt.IntentLabel,
+		"session_id":              attempt.SessionID,
+		"status":                  attempt.Status,
+		"execution_mode":          attempt.ExecutionMode,
+		"default_execution_mode":  attempt.DefaultExecutionMode,
+		"execution_mode_override": attempt.ExecutionModeOverride,
+		"submit_execution_mode":   attempt.Mode,
+		"queue_position":          attempt.QueuePos,
+		"source":                  attempt.Source,
+		"submit_queue_state":      s.submitQueueState(),
+		"submit_attempts":         s.submitAttemptsSnapshot(),
 	})
 }
 
@@ -3425,6 +3513,9 @@ func (s *Server) handleRuntimeCodex(w http.ResponseWriter, r *http.Request) {
 		if strings.TrimSpace(req.DefaultProvider) != "" {
 			rc.DefaultProvider = canonicalProviderAlias(strings.TrimSpace(req.DefaultProvider), s.agents.Names())
 		}
+		if strings.TrimSpace(req.DefaultExecutionMode) != "" {
+			rc.DefaultExecutionMode = normalizeExecutionMode(req.DefaultExecutionMode)
+		}
 		rc.CLIAdapterCmd = strings.TrimSpace(req.CLIAdapterCmd)
 		if req.CLITimeoutSeconds != nil {
 			rc.CLITimeoutSeconds = max(0, *req.CLITimeoutSeconds)
@@ -3479,17 +3570,18 @@ func (s *Server) handleRuntimeCodex(w http.ResponseWriter, r *http.Request) {
 	_ = s.audit.Write(audit.Event{
 		Type: "runtime_codex_updated",
 		Details: map[string]any{
-			"default_provider":      s.resolveProvider(""),
-			"has_cli_adapter_cmd":   strings.TrimSpace(req.CLIAdapterCmd) != "",
-			"has_claude_cli_cmd":    strings.TrimSpace(req.ClaudeCLIAdapterCmd) != "",
-			"has_opencode_cli_cmd":  strings.TrimSpace(req.OpenCodeCLIAdapterCmd) != "",
-			"has_anthropic_base":    strings.TrimSpace(req.AnthropicBaseURL) != "",
-			"workdir":               strings.TrimSpace(req.CodexWorkdir),
-			"sandbox":               strings.TrimSpace(req.CodexSandbox),
-			"approval_policy":       strings.TrimSpace(req.CodexApproval),
-			"submit_execution_mode": s.submitExecutionMode(),
-			"has_post_rebuild":      strings.TrimSpace(req.PostSubmitRebuild) != "",
-			"has_post_verify":       strings.TrimSpace(req.PostSubmitVerify) != "",
+			"default_provider":       s.resolveProvider(""),
+			"default_execution_mode": s.defaultExecutionMode(),
+			"has_cli_adapter_cmd":    strings.TrimSpace(req.CLIAdapterCmd) != "",
+			"has_claude_cli_cmd":     strings.TrimSpace(req.ClaudeCLIAdapterCmd) != "",
+			"has_opencode_cli_cmd":   strings.TrimSpace(req.OpenCodeCLIAdapterCmd) != "",
+			"has_anthropic_base":     strings.TrimSpace(req.AnthropicBaseURL) != "",
+			"workdir":                strings.TrimSpace(req.CodexWorkdir),
+			"sandbox":                strings.TrimSpace(req.CodexSandbox),
+			"approval_policy":        strings.TrimSpace(req.CodexApproval),
+			"submit_execution_mode":  s.submitExecutionMode(),
+			"has_post_rebuild":       strings.TrimSpace(req.PostSubmitRebuild) != "",
+			"has_post_verify":        strings.TrimSpace(req.PostSubmitVerify) != "",
 		},
 	})
 	if err := s.persistOperatorState(cfg); err != nil {
@@ -3720,6 +3812,16 @@ func writeJSON(w http.ResponseWriter, payload any) {
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		http.Error(w, fmt.Sprintf("encode json response: %v", err), http.StatusInternalServerError)
 	}
+}
+
+func writeJSONError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"code":    strings.TrimSpace(code),
+		"error":   strings.TrimSpace(message),
+		"message": strings.TrimSpace(message),
+	})
 }
 
 func parseClipVideoMetadata(r *http.Request) *session.VideoMetadata {

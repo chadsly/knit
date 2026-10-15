@@ -112,7 +112,7 @@ func TestSubmissionQueueSeriesProcessesInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve first package: %v", err)
 	}
-	srv.enqueueSubmitJob("fake_queue", *pkg1, map[string]any{"id": "one"}, agents.DeliveryIntent{}, "test", "test")
+	srv.enqueueSubmitJob("fake_queue", *pkg1, "", map[string]any{"id": "one"}, agents.DeliveryIntent{}, "test", "test")
 
 	if _, err := srv.sessions.AddFeedback(session.FeedbackEvt{RawTranscript: "second", NormalizedText: "second"}); err != nil {
 		t.Fatalf("add second feedback: %v", err)
@@ -124,7 +124,7 @@ func TestSubmissionQueueSeriesProcessesInOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve second package: %v", err)
 	}
-	srv.enqueueSubmitJob("fake_queue", *pkg2, map[string]any{"id": "two"}, agents.DeliveryIntent{}, "test", "test")
+	srv.enqueueSubmitJob("fake_queue", *pkg2, "", map[string]any{"id": "two"}, agents.DeliveryIntent{}, "test", "test")
 
 	waitForSubmitDrain(t, srv, 3*time.Second)
 	attempts := srv.submitAttemptsSnapshot()
@@ -185,7 +185,7 @@ func TestSubmissionQueueParallelDefersPostSubmitUntilDrain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve first package: %v", err)
 	}
-	srv.enqueueSubmitJob("fake_queue", *pkg1, map[string]any{"id": "one"}, agents.DeliveryIntent{}, "test", "test")
+	srv.enqueueSubmitJob("fake_queue", *pkg1, "", map[string]any{"id": "one"}, agents.DeliveryIntent{}, "test", "test")
 
 	if _, err := srv.sessions.AddFeedback(session.FeedbackEvt{RawTranscript: "second", NormalizedText: "second"}); err != nil {
 		t.Fatalf("add second feedback: %v", err)
@@ -197,7 +197,7 @@ func TestSubmissionQueueParallelDefersPostSubmitUntilDrain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve second package: %v", err)
 	}
-	srv.enqueueSubmitJob("fake_queue", *pkg2, map[string]any{"id": "two"}, agents.DeliveryIntent{}, "test", "test")
+	srv.enqueueSubmitJob("fake_queue", *pkg2, "", map[string]any{"id": "two"}, agents.DeliveryIntent{}, "test", "test")
 
 	waitForSubmitDrain(t, srv, 3*time.Second)
 	if got := adapter.maxConcurrency(); got < 2 {
@@ -233,7 +233,7 @@ func TestSubmissionRetryBackoffSucceedsOnSecondAttempt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve package: %v", err)
 	}
-	attempt := srv.enqueueSubmitJob("fake_queue", *pkg, map[string]any{"id": "retry"}, agents.DeliveryIntent{}, "test", "test")
+	attempt := srv.enqueueSubmitJob("fake_queue", *pkg, "", map[string]any{"id": "retry"}, agents.DeliveryIntent{}, "test", "test")
 	waitForSubmitDrain(t, srv, 4*time.Second)
 
 	snapshot, ok := srv.submitAttemptByID(attempt.AttemptID)
@@ -258,6 +258,153 @@ func TestSubmissionRetryBackoffSucceedsOnSecondAttempt(t *testing.T) {
 	}
 	if !foundRetryEvent {
 		t.Fatalf("expected retry_wait timeline event")
+	}
+}
+
+func TestWorkerModeSubmitQueuesWithoutLaunchingDirectExec(t *testing.T) {
+	t.Setenv("KNIT_DEFAULT_EXECUTION_MODE", executionModeWorker)
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	adapter := &fakeQueueAdapter{name: "fake_queue", delay: 25 * time.Millisecond}
+	srv.agents = agents.NewRegistry(adapter)
+
+	srv.sessions.Start("Browser Preview", "https://example.com")
+	if _, err := srv.sessions.AddFeedback(session.FeedbackEvt{RawTranscript: "queue me", NormalizedText: "queue me"}); err != nil {
+		t.Fatalf("add feedback: %v", err)
+	}
+	if _, err := srv.sessions.Approve(""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	pkg, err := srv.sessions.ReserveApprovedPackage()
+	if err != nil {
+		t.Fatalf("reserve package: %v", err)
+	}
+
+	attempt := srv.enqueueSubmitJob("fake_queue", *pkg, "", map[string]any{"id": "worker"}, agents.DeliveryIntent{}, "test", "test")
+	time.Sleep(150 * time.Millisecond)
+
+	if got := adapter.calls(); got != 0 {
+		t.Fatalf("expected worker-mode request to avoid direct adapter execution, got %d calls", got)
+	}
+	snapshot, ok := srv.submitAttemptByID(attempt.AttemptID)
+	if !ok {
+		t.Fatalf("expected attempt snapshot")
+	}
+	if snapshot.Status != "queued" {
+		t.Fatalf("expected queued status, got %q", snapshot.Status)
+	}
+	if snapshot.ExecutionMode != executionModeWorker {
+		t.Fatalf("expected execution mode %q, got %q", executionModeWorker, snapshot.ExecutionMode)
+	}
+	if snapshot.Note != "Queued for worker" {
+		t.Fatalf("expected worker-mode note, got %q", snapshot.Note)
+	}
+	if snapshot.StateCode != queueCodeWorkerNotConnected {
+		t.Fatalf("expected state code %q, got %q", queueCodeWorkerNotConnected, snapshot.StateCode)
+	}
+	if !strings.Contains(snapshot.StateMessage, "No worker session is connected") {
+		t.Fatalf("expected worker queue warning message, got %q", snapshot.StateMessage)
+	}
+	queue := srv.submitQueueState()
+	if got, _ := queue["mcp_worker_queued"].(int); got != 1 {
+		t.Fatalf("expected one queued worker request, got %#v", queue)
+	}
+	if got, _ := queue["direct_exec_queued"].(int); got != 0 {
+		t.Fatalf("expected no direct-exec queued work, got %#v", queue)
+	}
+	warnings, _ := queue["warnings"].([]queueStateMessage)
+	if len(warnings) != 1 || warnings[0].Code != queueCodeWorkerNotConnected {
+		t.Fatalf("expected queued worker warning code %q, got %#v", queueCodeWorkerNotConnected, warnings)
+	}
+	srv.registerSubmitWorker("warning-worker", []string{"fake_queue"}, "knit_mcp", "Worker")
+	queue = srv.submitQueueState()
+	if warnings, _ := queue["warnings"].([]queueStateMessage); len(warnings) != 0 {
+		t.Fatalf("expected registration to clear stale queue warnings, got %#v", warnings)
+	}
+}
+
+func TestWorkerClaimsAreProviderScopedAndRecoverAfterLeaseExpiry(t *testing.T) {
+	cfg := config.Default()
+	cfg.ControlToken = "test-token"
+	srv := newTestServer(t, cfg)
+
+	adapterA := &fakeQueueAdapter{name: "fake_a"}
+	adapterB := &fakeQueueAdapter{name: "fake_b"}
+	srv.agents = agents.NewRegistry(adapterA, adapterB)
+
+	srv.sessions.Start("Browser Preview", "https://example.com")
+	if _, err := srv.sessions.AddFeedback(session.FeedbackEvt{RawTranscript: "worker claim", NormalizedText: "worker claim"}); err != nil {
+		t.Fatalf("add feedback: %v", err)
+	}
+	if _, err := srv.sessions.Approve(""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	pkg, err := srv.sessions.ReserveApprovedPackage()
+	if err != nil {
+		t.Fatalf("reserve package: %v", err)
+	}
+
+	attempt := srv.enqueueSubmitJob("fake_a", *pkg, executionModeWorker, map[string]any{"id": "worker-a"}, agents.DeliveryIntent{}, "test", "test")
+	workerA := srv.registerSubmitWorker("worker-a", []string{"fake_a"}, "test", "Worker A")
+	srv.registerSubmitWorker("worker-b", []string{"fake_b"}, "test", "Worker B")
+	srv.registerSubmitWorker("worker-c", []string{"fake_a"}, "test", "Worker C")
+
+	if _, ok := srv.waitForWorkerJob("worker-b", 200*time.Millisecond); ok {
+		t.Fatalf("expected incompatible worker to see no claimable job")
+	}
+	job, ok := srv.waitForWorkerJob("worker-a", time.Second)
+	if !ok {
+		t.Fatalf("expected compatible worker to receive claimable job")
+	}
+	if job.AttemptID != attempt.AttemptID {
+		t.Fatalf("expected attempt %s, got %s", attempt.AttemptID, job.AttemptID)
+	}
+
+	claimed, ok, code, err := srv.claimWorkerJob("worker-a", attempt.AttemptID)
+	if err != nil {
+		t.Fatalf("claim worker job: %v", err)
+	}
+	if code != "" {
+		t.Fatalf("expected no claim code on success, got %q", code)
+	}
+	if !ok || claimed.AttemptID != attempt.AttemptID {
+		t.Fatalf("expected successful claim, got ok=%v attempt=%#v", ok, claimed)
+	}
+	srv.unregisterSubmitWorker("worker-a")
+	if snapshot, _ := srv.submitAttemptByID(attempt.AttemptID); snapshot.Status != "in_progress" {
+		t.Fatal("disconnect released the request before its claim lease expired")
+	}
+	if _, alreadyClaimed, conflictCode, err := srv.claimWorkerJob("worker-c", attempt.AttemptID); err != nil || !alreadyClaimed {
+		t.Fatalf("expected second worker claim attempt to be rejected, ok=%v err=%v", alreadyClaimed, err)
+	} else if conflictCode != queueCodeClaimConflict {
+		t.Fatalf("expected claim conflict code, got %q", conflictCode)
+	}
+
+	srv.submitMu.Lock()
+	workerA.LastHeartbeatAt = time.Now().UTC().Add(-2 * workerHeartbeatTTL)
+	srv.submitWorkers[workerA.WorkerID] = workerA
+	job = srv.submitClaimed[attempt.AttemptID]
+	expiredAt := time.Now().UTC().Add(-time.Second)
+	job.LeaseExpiresAt = &expiredAt
+	srv.submitClaimed[attempt.AttemptID] = job
+	srv.releaseExpiredWorkerClaimsLocked(time.Now().UTC())
+	srv.submitMu.Unlock()
+
+	requeued, ok := srv.waitForWorkerJob("worker-c", time.Second)
+	if !ok || requeued.AttemptID != attempt.AttemptID {
+		t.Fatalf("expected reclaimed job after worker expiry, got ok=%v job=%#v", ok, requeued)
+	}
+	snapshot, _ := srv.submitAttemptByID(attempt.AttemptID)
+	if snapshot.Status != "queued" {
+		t.Fatalf("expected attempt to be re-queued after expiry, got %q", snapshot.Status)
+	}
+	if snapshot.StateCode != queueCodeWorkerDisconnected {
+		t.Fatalf("expected worker-disconnected code after lease expiry, got %q", snapshot.StateCode)
+	}
+	if !strings.Contains(snapshot.StateMessage, "waiting to be claimed again") {
+		t.Fatalf("expected worker-disconnected message after lease expiry, got %q", snapshot.StateMessage)
 	}
 }
 
@@ -289,7 +436,7 @@ func TestSubmissionOfflineDeferredRetriesAndEventuallySubmits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve package: %v", err)
 	}
-	attempt := srv.enqueueSubmitJob("fake_remote", *pkg, map[string]any{"id": "offline"}, agents.DeliveryIntent{}, "test", "test")
+	attempt := srv.enqueueSubmitJob("fake_remote", *pkg, "", map[string]any{"id": "offline"}, agents.DeliveryIntent{}, "test", "test")
 	waitForAttemptStatusDirect(t, srv, attempt.AttemptID, "submitted", 6*time.Second)
 
 	snapshot, ok := srv.submitAttemptByID(attempt.AttemptID)
@@ -331,7 +478,7 @@ func TestCancelQueuedSubmitAttemptMarksAttemptCanceled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve first package: %v", err)
 	}
-	first := srv.enqueueSubmitJob("fake_queue", *pkg1, map[string]any{"id": "one"}, agents.DeliveryIntent{}, "test", "test")
+	first := srv.enqueueSubmitJob("fake_queue", *pkg1, "", map[string]any{"id": "one"}, agents.DeliveryIntent{}, "test", "test")
 
 	if _, err := srv.sessions.AddFeedback(session.FeedbackEvt{RawTranscript: "second", NormalizedText: "second"}); err != nil {
 		t.Fatalf("add second feedback: %v", err)
@@ -343,7 +490,7 @@ func TestCancelQueuedSubmitAttemptMarksAttemptCanceled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve second package: %v", err)
 	}
-	second := srv.enqueueSubmitJob("fake_queue", *pkg2, map[string]any{"id": "two"}, agents.DeliveryIntent{}, "test", "test")
+	second := srv.enqueueSubmitJob("fake_queue", *pkg2, "", map[string]any{"id": "two"}, agents.DeliveryIntent{}, "test", "test")
 
 	waitForAttemptStatusDirect(t, srv, first.AttemptID, "in_progress", 2*time.Second)
 	if _, found, err := srv.cancelSubmitAttempt(second.AttemptID, "test", "test"); err != nil || !found {
@@ -385,7 +532,7 @@ func TestCancelRunningSubmitAttemptStopsExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve package: %v", err)
 	}
-	attempt := srv.enqueueSubmitJob("fake_queue", *pkg, map[string]any{"id": "cancel"}, agents.DeliveryIntent{}, "test", "test")
+	attempt := srv.enqueueSubmitJob("fake_queue", *pkg, "", map[string]any{"id": "cancel"}, agents.DeliveryIntent{}, "test", "test")
 
 	waitForAttemptStatusDirect(t, srv, attempt.AttemptID, "in_progress", 2*time.Second)
 	if _, found, err := srv.cancelSubmitAttempt(attempt.AttemptID, "test", "test"); err != nil || !found {
@@ -428,7 +575,7 @@ func TestNamedCLIProvidersCaptureExecutionLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve package: %v", err)
 	}
-	attempt := srv.enqueueSubmitJob("claude_cli", *pkg, map[string]any{"id": "claude-log"}, agents.DeliveryIntent{}, "test", "test")
+	attempt := srv.enqueueSubmitJob("claude_cli", *pkg, "", map[string]any{"id": "claude-log"}, agents.DeliveryIntent{}, "test", "test")
 	waitForSubmitDrain(t, srv, 3*time.Second)
 
 	snapshot, ok := srv.submitAttemptByID(attempt.AttemptID)
@@ -512,7 +659,7 @@ func TestSubmitAttemptOutcomeClassifiesCommonNoOps(t *testing.T) {
 			}
 			srv := newTestServer(t, cfg)
 
-			attempt := srv.enqueueSubmitJob("codex_cli", tt.pkg, map[string]any{"id": tt.name}, agents.DeliveryIntent{}, "test", "test")
+			attempt := srv.enqueueSubmitJob("codex_cli", tt.pkg, "", map[string]any{"id": tt.name}, agents.DeliveryIntent{}, "test", "test")
 			waitForSubmitDrain(t, srv, 3*time.Second)
 
 			snapshot, ok := srv.submitAttemptByID(attempt.AttemptID)

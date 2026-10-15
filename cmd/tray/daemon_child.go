@@ -4,10 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"knit/internal/app"
@@ -37,7 +35,7 @@ func runServerOnly() {
 }
 
 func ensureServerRunning(addr string) error {
-	if probeServer(addr, 2*time.Second) {
+	if app.ProbeDaemon(addr, 2*time.Second) {
 		return nil
 	}
 	cmd, err := daemonChildCommand()
@@ -47,7 +45,7 @@ func ensureServerRunning(addr string) error {
 	if err := startDetachedProcess(cmd); err != nil {
 		return fmt.Errorf("start detached daemon child: %w", err)
 	}
-	if !waitForServer(addr, 12*time.Second) {
+	if !app.WaitForDaemon(addr, 12*time.Second) {
 		return fmt.Errorf("daemon child did not become healthy at http://%s/healthz", addr)
 	}
 	return nil
@@ -64,26 +62,9 @@ func daemonChildCommand() (*exec.Cmd, error) {
 }
 
 func probeServer(addr string, timeout time.Duration) bool {
-	addr = strings.TrimSpace(addr)
-	if addr == "" {
-		return false
-	}
-	client := &http.Client{Timeout: timeout}
-	resp, err := client.Get("http://" + addr + "/healthz")
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode >= 200 && resp.StatusCode < 300
+	return app.ProbeDaemon(addr, timeout)
 }
 
 func waitForServer(addr string, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if probeServer(addr, 2*time.Second) {
-			return true
-		}
-		time.Sleep(250 * time.Millisecond)
-	}
-	return probeServer(addr, 2*time.Second)
+	return app.WaitForDaemon(addr, timeout)
 }

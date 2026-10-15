@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const { ensureInstalled, runtimeDirForPackage, daemonBinaryPath, packageRoot } = require("../lib/install");
 
 function usage() {
-  process.stdout.write("Usage: knit <start|path|version> [args...]\n");
+  process.stdout.write("Usage: knit <start|mcp|path|version> [args...]\n");
 }
 
 function main() {
@@ -20,14 +20,14 @@ function main() {
     process.stdout.write(daemonBinaryPath(runtimeDirForPackage()) + "\n");
     return;
   }
-  if (command !== "start") {
+  if (command !== "start" && command !== "mcp") {
     usage();
     process.exitCode = 1;
     return;
   }
   ensureInstalled();
   const bin = daemonBinaryPath(runtimeDirForPackage());
-  const args = process.argv.slice(3);
+  const args = command === "mcp" ? process.argv.slice(2) : process.argv.slice(3);
   const child = spawnSync(bin, args, { stdio: "inherit", env: process.env });
   if (typeof child.status === "number") {
     process.exitCode = child.status;

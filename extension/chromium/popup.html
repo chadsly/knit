@@ -122,12 +122,12 @@
   <main>
     <section id="pairingCard" class="card">
       <h2>Pair With Local Daemon</h2>
-      <p class="helper">Enter the one-time code from the main Knit UI. After pairing, the full browser composer lives in the side panel.</p>
+      <p class="helper">Enter either the one-time pairing code from the main Knit UI or a managed browser token from <code>knit mcp</code>. After pairing, the full browser composer lives in the side panel.</p>
       <label>Daemon URL
         <input id="daemonBaseURL" placeholder="http://127.0.0.1:7777" />
       </label>
-      <label>Pairing code from Knit
-        <input id="pairingCode" placeholder="AB12CD34" maxlength="16" />
+      <label>Pairing code or managed token
+        <input id="pairingCode" placeholder="AB12CD34 or knit-ext-token" maxlength="256" />
       </label>
       <div class="row">
         <button id="pairBtn" class="primary">Pair extension</button>
@@ -146,7 +146,7 @@
 
     <section class="card">
       <h2>Status</h2>
-      <div id="status" class="status">Enter the pairing code from the main Knit UI to connect this browser.</div>
+      <div id="status" class="status">Enter the pairing code or managed token from Knit to connect this browser.</div>
     </section>
   </main>
   <script src="popup.js"></script>
