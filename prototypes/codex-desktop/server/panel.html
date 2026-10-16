@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Knit connection check</title>
+<style>
+:root{color-scheme:light dark;font-family:Georgia,serif;background:#f6f3ec;color:#233d38}
+body{margin:0;padding:24px;max-width:480px}h1{font-size:24px;margin:0 0 12px}p{line-height:1.5}
+button{font:inherit;padding:12px 18px;border:0;border-radius:10px;background:#17665a;color:white;cursor:pointer}
+button:disabled{opacity:.5;cursor:default}button:focus-visible{outline:3px solid #cb8620;outline-offset:3px}
+@media(prefers-color-scheme:dark){:root{background:#162725;color:#f6f3ec}}
+</style></head><body>
+<h1>Connect Knit to this conversation</h1>
+<p>This development check sends one harmless message here. It does not read your files or change permissions.</p>
+<button id="send" disabled>Send test message</button>
+<p id="status" role="status" aria-live="polite">Checking desktop support...</p>
+<script>
+const button=document.getElementById('send');
+const status=document.getElementById('status');
+function detect(){
+ const available=typeof window.openai?.sendFollowUpMessage==='function';
+ button.disabled=!available;
+ status.textContent=available?'Ready to test this conversation.':'This host has not exposed the message bridge. Reopen this panel after enabling the plugin.';
+}
+window.addEventListener('openai:set_globals',detect);
+detect();
+button.addEventListener('click',async()=>{
+ button.disabled=true;
+ try{
+  const id='KNIT_DESKTOP_PROBE_'+crypto.randomUUID();
+  await window.openai.sendFollowUpMessage({prompt:'Knit connection verification '+id+'. Reply with exactly this marker. Do not use tools or modify files.',scrollToBottom:true});
+  status.textContent='Host accepted '+id+'. Verify the same marker appears in the agent response in this conversation. Completion is not yet verified.';
+ }catch(error){status.textContent='Delivery failed: '+String(error?.message||error);button.disabled=false;}
+});
+</script></body></html>

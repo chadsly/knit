@@ -1,5 +1,16 @@
 # Architecture
 
+Private-pilot distribution uses a platform-specific prebuilt daemon plus portable
+and legacy plugin manifests. The installer registers a local marketplace and
+resolves cached executable paths for older Codex builds; no runtime secrets or
+source checkout are packaged. `knit mcp --desktop` selects an isolated persistent
+OS user-config profile and port 7778, preserving explicit environment overrides.
+Normal startup modes are unchanged. See [Private Pilot](PRIVATE_PILOT.md).
+Builds/CI select patched Go 1.26.9, with golang.org/x/sys v0.44.0 addressing the
+Windows NewNTUnicodeString advisory.
+
+The 1.0 desktop-owned conversation integration and its release gates are documented in [Knit 1.0](KNIT_1_0.md). The text-only development preview adds `internal/desktop` for encrypted durable delivery and `internal/desktopui` for the conversation panel. Authenticated desktop endpoints and MCP tools delegate to that service; the extension can submit and read status but cannot manage panel connections. The shared service instance also enforces structured-data retention without racing queue writes. Direct-exec and MCP worker queues remain separate. It is not yet a verified production desktop connection.
+
 `Knit` is a local-first feedback capture system. The executable surface is small, but the daemon coordinates capture state, local persistence, packaging, audit, and submission to agent adapters.
 
 ## Entry Points

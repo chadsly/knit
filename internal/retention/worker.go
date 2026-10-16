@@ -6,6 +6,7 @@ import (
 
 	"knit/internal/audit"
 	"knit/internal/config"
+	"knit/internal/desktop"
 	"knit/internal/storage"
 )
 
@@ -14,10 +15,15 @@ type Worker struct {
 	store     storage.Store
 	artifacts *storage.ArtifactStore
 	audit     *audit.Logger
+	desktop   *desktop.Service
 }
 
-func NewWorker(cfg config.Config, store storage.Store, artifacts *storage.ArtifactStore, auditLogger *audit.Logger) *Worker {
-	return &Worker{cfg: cfg, store: store, artifacts: artifacts, audit: auditLogger}
+func NewWorker(cfg config.Config, store storage.Store, artifacts *storage.ArtifactStore, auditLogger *audit.Logger, desktopQueue ...*desktop.Service) *Worker {
+	queue := desktop.New(store)
+	if len(desktopQueue) > 0 && desktopQueue[0] != nil {
+		queue = desktopQueue[0]
+	}
+	return &Worker{cfg: cfg, store: store, artifacts: artifacts, audit: auditLogger, desktop: queue}
 }
 
 func (w *Worker) Run(ctx context.Context) {
@@ -48,6 +54,9 @@ func (w *Worker) RunOnce() {
 
 	if w.cfg.StructuredRetention > 0 {
 		cutoff := now.Add(-w.cfg.StructuredRetention)
+		if err := w.desktop.PurgeBefore(cutoff); err != nil {
+			purgeDetails["desktop_purge_failed"] = true
+		}
 		if n, err := w.store.PurgeSessionsOlderThan(cutoff); err == nil {
 			purgeDetails["sessions_deleted"] = n
 		}

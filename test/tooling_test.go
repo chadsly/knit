@@ -35,6 +35,32 @@ func TestSecurityAndBuildScriptsExist(t *testing.T) {
 	}
 }
 
+func TestReleaseSecurityToolchainAndWindowsScan(t *testing.T) {
+	for _, file := range []string{"../.github/workflows/ci.yml", "../.github/workflows/release.yml"} {
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), `go-version: "1.26.9"`) || strings.Contains(string(raw), `go-version: "1.24"`) {
+			t.Fatal("release toolchain pin missing", file)
+		}
+	}
+	ci, err := os.ReadFile("../.github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(ci), "go install golang.org/x/vuln/cmd/govulncheck@v1.9.0") || !strings.Contains(string(ci), "GOOS=windows GOARCH=amd64 govulncheck ./...") {
+		t.Fatal("CI must execute an actual Windows vulnerability scan")
+	}
+	mod, err := os.ReadFile("../go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(mod), "toolchain go1.26.9") || !strings.Contains(string(mod), "golang.org/x/sys v0.44.0") {
+		t.Fatal("patched toolchain/dependency selection missing")
+	}
+}
+
 func TestConfigExamplesExist(t *testing.T) {
 	files := []string{
 		"../.env.example",
@@ -458,7 +484,11 @@ func TestChromiumExtensionSidePanelHostsComposer(t *testing.T) {
 		`.queue-table td {`,
 		`.queue-link {`,
 		`id="preview" class="preview"`,
-		`Pair this browser from the popup first to connect it to the main Knit UI.`,
+		`Connect this browser to your Codex conversation below.`,
+		`id="desktopConnectSetup"`,
+		`id="desktopConnectionCode" type="password"`,
+		`Connect and start review`,
+		`<script src="desktop-connect.js"></script>`,
 		`id="previewVideo" class="hidden"`,
 		`data-tooltip="Type note. Show or hide the typed note field."`,
 		`data-tooltip="Preview queued requests before submitting."`,
@@ -519,12 +549,12 @@ func TestChromiumExtensionRecorderIncludesCaptureFlows(t *testing.T) {
 		`const IDLE_SESSION_REFRESH_MS = 5000;`,
 		`function renderHeaderHelper()`,
 		`headerHelperEl.classList.toggle("hidden", paired);`,
-			`function formatElapsedClock(ms)`,
-			`function stopVideoGuidanceTimer()`,
-			`function ensureVideoGuidanceTimer()`,
-			`function renderVideoGuidance()`,
-			`if (recordingKind !== "video" && !videoNoteFinalizing) {`,
-			`Recording video note:`,
+		`function formatElapsedClock(ms)`,
+		`function stopVideoGuidanceTimer()`,
+		`function ensureVideoGuidanceTimer()`,
+		`function renderVideoGuidance()`,
+		`if (recordingKind !== "video" && !videoNoteFinalizing) {`,
+		`Recording video note:`,
 		`function renderActivityState()`,
 		`function hasActiveSubmitAttempt(data)`,
 		`function stopSessionRefreshTimer()`,
@@ -607,6 +637,9 @@ func TestChromiumExtensionRecorderIncludesCaptureFlows(t *testing.T) {
 		`watchedSubmitAttemptID = attemptID;`,
 		`stopVideoGuidanceTimer();`,
 		`Start a review session from the main UI first.`,
+		`document.getElementById("desktopReviewToggle").addEventListener("click"`,
+		`function hasActiveReview()`,
+		`toggle.textContent = hasActiveReview() ? "End review" : "Start review";`,
 		`Snapshot queued. Type a note and press Cmd/Ctrl+Enter, or record audio or video next.`,
 	}
 	for _, fragment := range required {
@@ -617,7 +650,6 @@ func TestChromiumExtensionRecorderIncludesCaptureFlows(t *testing.T) {
 	forbidden := []string{
 		`async function startSession()`,
 		`startBtnEl.addEventListener("click"`,
-		`/api/session/start`,
 	}
 	for _, fragment := range forbidden {
 		if strings.Contains(script, fragment) {

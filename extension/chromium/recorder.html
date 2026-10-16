@@ -260,6 +260,11 @@
       display: block;
       margin-top: 10px;
     }
+    #desktopConnectSetup { margin: 14px 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+    #desktopConnectSetup summary { font-weight: 700; cursor: pointer; }
+    #desktopConnectionCode { margin-top: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; font: inherit; background: var(--surface-strong); color: var(--ink); }
+    #desktopConnectConfirm { width: 100%; background: var(--accent); color: #fff; }
+    #desktopConnectionTarget { margin: 10px 0; }
     .capture-state {
       margin-top: 12px;
       color: var(--muted);
@@ -333,11 +338,18 @@
       padding: 0;
       vertical-align: top;
     }
+    .queue-error {
+      margin-top: 6px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
     .queue-table td:last-child {
       text-align: right;
       white-space: nowrap;
       padding-left: 10px;
     }
+    .queue-table a,
+    .queue-table a:visited,
     .queue-link {
       border: 0;
       padding: 0;
@@ -347,11 +359,18 @@
       text-align: left;
       cursor: pointer;
     }
+    .queue-table a:hover,
+    .queue-table a:focus-visible,
     .queue-link:hover,
     .queue-link:focus-visible {
       color: var(--accent);
-      outline: none;
       text-decoration: underline;
+    }
+    .queue-table a:focus-visible,
+    .queue-link:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+      border-radius: 2px;
     }
     .preview {
       margin-top: 12px;
@@ -541,13 +560,27 @@
             </div>
             <button id="themeToggleBtn" class="theme-toggle" title="Switch to dark theme" aria-label="Switch to dark theme">☾</button>
           </div>
-          <p id="headerHelper" class="helper hidden">Pair this browser from the popup first to connect it to the main Knit UI.</p>
+          <p id="headerHelper" class="helper hidden">Connect this browser to your Codex conversation below.</p>
         </div>
         <div class="header-status-row">
           <div id="sessionState" class="session-pill idle">Session idle</div>
         </div>
       </div>
 
+      <details id="desktopConnectSetup">
+        <summary>Connect to Codex</summary>
+        <p class="helper">In your Codex feedback panel, select Connect browser and copy its connection code. Paste it here once. Knit remembers the connection.</p>
+        <label for="desktopConnectionCode">Connection code</label>
+        <input id="desktopConnectionCode" type="password" autocomplete="off" style="width:100%;box-sizing:border-box" placeholder="Paste code from Codex">
+        <p id="desktopConnectionTarget" class="helper" role="status"></p>
+        <button id="desktopConnectConfirm">Connect and start review</button>
+      </details>
+      <div id="desktopReviewControls" class="hidden" style="margin:10px 0"><button id="desktopReviewToggle">End review</button></div>
+      <div id="desktopDestinationWrap" class="hidden">
+        <label for="desktopDestination" class="helper">Send to</label>
+        <select id="desktopDestination" style="width:100%;padding:8px;border-radius:10px;background:var(--surface-strong);color:var(--ink);border:1px solid var(--line);font:inherit;font-size:12px;" aria-describedby="desktopDestinationHint"></select>
+        <p id="desktopDestinationHint" class="helper"></p>
+      </div>
       <div class="row four-up">
         <span class="tooltip-wrap" data-tooltip="Type note. Show or hide the typed note field.">
           <button id="toggleTextBtn" class="icon-button" aria-label="Type note. Show or hide the typed note field.">
@@ -603,10 +636,12 @@
       <div id="submitNotice" class="notice hidden" aria-live="polite"></div>
       <div id="queueIndicator" class="queue-indicator hidden" aria-live="polite"></div>
       <div id="status" class="status">Pair the extension from the popup first.</div>
+      <button id="microphoneSetup" class="hidden" type="button">Enable microphone</button>
       <div id="preview" class="preview"><div class="preview-empty">Preview updates here automatically as you capture notes, snapshots, audio, and video.</div></div>
       <video id="previewVideo" class="hidden" autoplay muted playsinline></video>
     </section>
   </main>
+  <script src="desktop-connect.js"></script>
   <script src="recorder.js"></script>
 </body>
 </html>

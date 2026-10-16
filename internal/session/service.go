@@ -456,6 +456,13 @@ func (s *Service) ApprovedPackage() (*CanonicalPackage, error) {
 }
 
 func (s *Service) ReserveApprovedPackage() (*CanonicalPackage, error) {
+	return s.ReserveApprovedPackageWith(nil)
+}
+
+// ReserveApprovedPackageWith commits an external durable queue write before
+// consuming approval, while preventing capture or another submit from racing it.
+// The callback must not call back into this session service.
+func (s *Service) ReserveApprovedPackageWith(commit func(*CanonicalPackage) error) (*CanonicalPackage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.current == nil {
@@ -465,6 +472,11 @@ func (s *Service) ReserveApprovedPackage() (*CanonicalPackage, error) {
 		return nil, ErrReviewNotApproved
 	}
 	cp := cloneCanonicalPackage(s.lastApprovedPack)
+	if commit != nil {
+		if err := commit(cp); err != nil {
+			return nil, err
+		}
+	}
 	queuedIDs := make(map[string]struct{}, len(cp.ChangeRequests))
 	for _, req := range cp.ChangeRequests {
 		if id := strings.TrimSpace(req.EventID); id != "" {

@@ -24,6 +24,7 @@ import (
 	"knit/internal/audit"
 	"knit/internal/companion"
 	"knit/internal/config"
+	"knit/internal/desktop"
 	"knit/internal/operatorstate"
 	"knit/internal/platform"
 	"knit/internal/privileged"
@@ -43,21 +44,23 @@ const (
 var transcriptionLanguagePattern = regexp.MustCompile(`^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,2}$`)
 
 type Server struct {
-	cfgMu        sync.RWMutex
-	cfg          config.Config
-	runtimeMu    sync.RWMutex
-	runtime      operatorstate.State
-	daemonMode   string
-	daemonID     string
-	nonceMu      sync.Mutex
-	nonces       map[string]time.Time
-	pairMu       sync.Mutex
-	pendingPairs map[string]pendingExtensionPairing
-	sttMu        sync.RWMutex
-	submitMu     sync.Mutex
-	submitQ      int
-	submitRun    int
-	submitSeq    int64
+	desktop         *desktop.Service
+	desktopSubmitMu sync.Mutex
+	cfgMu           sync.RWMutex
+	cfg             config.Config
+	runtimeMu       sync.RWMutex
+	runtime         operatorstate.State
+	daemonMode      string
+	daemonID        string
+	nonceMu         sync.Mutex
+	nonces          map[string]time.Time
+	pairMu          sync.Mutex
+	pendingPairs    map[string]pendingExtensionPairing
+	sttMu           sync.RWMutex
+	submitMu        sync.Mutex
+	submitQ         int
+	submitRun       int
+	submitSeq       int64
 	// submit workers and execution state
 	submitSeriesCh      chan submitJob
 	submitPending       []submitJob
@@ -312,6 +315,7 @@ func New(
 		updateReleaseAPIURL: defaultReleaseCheckAPIURL,
 	}
 	s.daemonMode = normalizeDaemonInstanceMode(os.Getenv("KNIT_DAEMON_INSTANCE_MODE"))
+	s.desktop = desktop.New(store)
 	s.daemonID = strings.TrimSpace(os.Getenv("KNIT_DAEMON_INSTANCE_ID"))
 	if s.daemonID == "" {
 		s.daemonID = fmt.Sprintf("daemon-%d", time.Now().UTC().UnixNano())
@@ -348,6 +352,10 @@ func New(
 	mux.HandleFunc("/companion.js", s.handleCompanionScript)
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.HandleFunc("/api/state", s.handleState)
+	mux.HandleFunc("/api/desktop", s.handleDesktopState)
+	mux.HandleFunc("/api/desktop/panel", s.handleDesktopPanel)
+	mux.HandleFunc("/api/desktop/submit", s.handleDesktopSubmit)
+	mux.HandleFunc("/api/desktop/capture", s.handleDesktopCapture)
 	mux.HandleFunc("/api/update/check", s.handleUpdateCheck)
 	mux.HandleFunc("/api/session/start", s.handleSessionStart)
 	mux.HandleFunc("/api/session/pause", s.handleSessionPause)
@@ -564,6 +572,10 @@ func capabilityAllows(granted, required string) bool {
 
 func requiredCapability(path, method string) string {
 	switch path {
+	case "/api/desktop/panel", "/api/desktop/capture":
+		return "config"
+	case "/api/desktop/submit":
+		return "submit"
 	case "/api/session/attempt/log", "/api/session/open-last-log", "/api/audit/export":
 		return "logs"
 	case "/api/config/export", "/api/extension/pairings":
@@ -761,6 +773,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{
 		"capture_state":            s.privilegedCapture.State(),
+		"desktop":                  s.desktopPublicState(),
 		"capture_sources":          s.privilegedCapture.SourceStatuses(),
 		"native_capture_modules":   platform.NativeCaptureModules(),
 		"platform_profile":         platform.CurrentProfile(),
@@ -3178,6 +3191,10 @@ func (s *Server) handlePurgeSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.store.DeleteSessionByID(curr.ID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := s.desktop.PurgeSession(curr.ID); err != nil {
+		http.Error(w, "Could not clear desktop deliveries", http.StatusInternalServerError)
 		return
 	}
 	deletedArtifacts, _ := s.artifacts.RemoveBySession(curr.ID)

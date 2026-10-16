@@ -266,7 +266,7 @@ func New(cfg config.Config) (*App, error) {
 		autoStart,
 		transcriptionProvider,
 	)
-	retentionWorker := retention.NewWorker(cfg, store, artifactStore, auditLogger)
+	retentionWorker := retention.NewWorker(cfg, store, artifactStore, auditLogger, httpServer.DesktopService())
 
 	return &App{server: httpServer, store: store, retention: retentionWorker}, nil
 }

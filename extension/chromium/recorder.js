@@ -19,6 +19,40 @@ const queueIndicatorEl = document.getElementById("queueIndicator");
 const statusEl = document.getElementById("status");
 const previewEl = document.getElementById("preview");
 const previewVideoEl = document.getElementById("previewVideo");
+const desktopDestinationEl = document.getElementById("desktopDestination");
+let desktopDestinationID = "";
+let desktopRequestID = "";
+
+const desktopConnectSetup = document.getElementById("desktopConnectSetup");
+const desktopConnectionCode = document.getElementById("desktopConnectionCode");
+const desktopConnectionTarget = document.getElementById("desktopConnectionTarget");
+desktopConnectionCode.addEventListener("input", () => {
+  try {
+    const code = KnitDesktopConnect.parse(desktopConnectionCode.value.trim());
+    desktopConnectionTarget.textContent = "Connect to: " + (code.label || "Codex conversation") + ". This starts a review; microphone and camera stay off until you choose to record.";
+  } catch (error) { desktopConnectionTarget.textContent = error.message; }
+});
+document.getElementById("desktopConnectConfirm").addEventListener("click", async () => {
+  const button = document.getElementById("desktopConnectConfirm");
+  if (button.disabled) return;
+  button.disabled = true;
+  setRequestInFlight(true);
+  setRequestActivity("Connecting to Codex…");
+  try {
+    const connected = await KnitDesktopConnect.connect(desktopConnectionCode.value.trim());
+    await callBackground({type:"knit:set-config",payload:{daemonBaseURL:connected.daemonBaseURL,daemonToken:connected.daemonToken,desktopDestinationID:connected.desktopDestinationID}});
+    config = {daemonBaseURL:connected.daemonBaseURL,daemonToken:connected.daemonToken};
+    desktopDestinationID = connected.desktopDestinationID;
+    desktopRequestID = "";
+    desktopConnectionCode.value = "";
+    desktopConnectSetup.open = false;
+    await refreshSession(true);
+    setStatus("");
+  } catch (error) {
+    desktopConnectSetup.open = true;
+    setStatus(error.message || "Could not reach Knit. Reopen the Codex feedback panel and try a new connection code.",true);
+  } finally { button.disabled = false; setRequestInFlight(false); }
+});
 
 const ICONS = {
   keyboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18H20"></path><path d="M7 14V6"></path><path d="M12 14V6"></path><path d="M17 14V6"></path><path d="M5 6H19"></path></svg>`,
@@ -120,6 +154,8 @@ async function loadConfig() {
     daemonBaseURL: String(stored?.daemonBaseURL || "http://127.0.0.1:7777").trim(),
     daemonToken: String(stored?.daemonToken || "").trim()
   };
+  const desktopSettings = await storageGet(["desktopDestinationID"]);
+  desktopDestinationID = String(desktopSettings?.desktopDestinationID || "");
 }
 
 async function blobToDataURL(blob) {
@@ -254,6 +290,18 @@ function renderActivityState() {
 
 function renderQueueIndicator() {
   if (!queueIndicatorEl) return;
+  if (desktopDestinationID) {
+    const deliveries = (currentSessionPayload?.desktop?.deliveries || []).filter(item => item.binding_id === desktopDestinationID).slice(-5).reverse();
+    const rows = deliveries.map(item => {
+      const url = config.daemonBaseURL.replace(/\/+$/, "") + "/#desktop-delivery-" + encodeURIComponent(item.id);
+      const errorStyle = item.status === "failed" || item.status === "needs_attention" ? ' style="color:var(--danger)"' : "";
+      const explanation = errorStyle && item.result ? `<div class="queue-error" role="alert">${escapeHTML(item.result)}</div>` : "";
+      return `<tr${errorStyle}><td><a href="${escapeHTML(url)}" target="_blank" rel="noopener">${escapeHTML(queueAttemptTitle({request_preview:item.summary}))}</a>${explanation}</td><td title="${escapeHTML(item.result || "")}">${escapeHTML(item.status === "queued" ? "waiting for panel" : item.status.replaceAll("_", " "))}</td></tr>`;
+    }).join("");
+    queueIndicatorEl.innerHTML = rows ? `<div>Codex panel requests</div><table class="queue-table"><tbody>${rows}</tbody></table>` : "";
+    queueIndicatorEl.classList.toggle("hidden", !rows);
+    return;
+  }
   const attempts = Array.isArray(currentSessionPayload?.submit_attempts) ? currentSessionPayload.submit_attempts : [];
   const queue = currentSessionPayload?.submit_queue || {};
   const running = Number(queue?.running || 0);
@@ -409,6 +457,7 @@ function setRequestInFlight(active) {
   }
   renderActivityState();
   renderComposerControls();
+  renderDesktopDestination();
 }
 
 function setRequestActivity(message) {
@@ -662,19 +711,19 @@ function renderHeaderHelper() {
   const paired = !!config.daemonToken;
   headerHelperEl.textContent = paired
     ? ""
-    : "Pair this browser from the popup first to connect it to the main Knit UI.";
+    : "Connect this browser to your Codex conversation below.";
   headerHelperEl.classList.toggle("hidden", paired);
 }
 
 function renderSessionState() {
-  const hasSession = !!currentSessionPayload?.session?.id;
+  const hasSession = hasActiveReview();
   sessionStateEl.textContent = hasSession ? "Session active" : "Session idle";
   sessionStateEl.classList.toggle("idle", !hasSession);
 }
 
 function renderTextEditorState() {
   textNoteWrapEl.classList.toggle("hidden", !textEditorOpen);
-  const hasSession = !!currentSessionPayload?.session?.id;
+  const hasSession = hasActiveReview();
   const saveReady = textEditorOpen && !!typedNoteValue();
   setIconButton(
     toggleTextBtnEl,
@@ -689,7 +738,7 @@ function renderTextEditorState() {
 }
 
 function renderComposerControls() {
-  const hasSession = !!currentSessionPayload?.session?.id;
+  const hasSession = hasActiveReview();
   const busy = requestInFlight || videoNoteFinalizing;
   setIconButton(
     snapshotBtnEl,
@@ -754,9 +803,63 @@ function renderComposerControls() {
 
 function renderSession(data) {
   currentSessionPayload = data || null;
+  renderDesktopDestination();
   renderComposerControls();
   renderQueueIndicator();
 }
+
+function hasActiveReview() {
+  return !!currentSessionPayload?.session?.id && currentSessionPayload.session.status !== "stopped";
+}
+
+function renderDesktopDestination() {
+  if (!desktopDestinationEl) return;
+  const bindings = currentSessionPayload?.desktop?.bindings || [];
+  const connected = !!config.daemonToken && bindings.some(item => item.id === desktopDestinationID);
+  desktopConnectSetup.classList.toggle("hidden", connected);
+  if (!connected && desktopDestinationID) desktopConnectSetup.open = true;
+  stopBtnEl.closest(".tooltip-wrap").classList.toggle("hidden", connected);
+  stopBtnEl.closest(".action-row").style.gridTemplateColumns = connected ? "repeat(2, minmax(0, 1fr))" : "";
+  document.getElementById("desktopReviewControls").classList.toggle("hidden", !connected);
+  const toggle = document.getElementById("desktopReviewToggle");
+  toggle.textContent = hasActiveReview() ? "End review" : "Start review";
+  toggle.disabled = requestInFlight || !!recordingKind;
+  const wrap = document.getElementById("desktopDestinationWrap");
+  wrap.classList.toggle("hidden", !bindings.length && !desktopDestinationID);
+  desktopDestinationEl.replaceChildren(new Option("Knit agent (current settings)", ""));
+  for (const binding of bindings) desktopDestinationEl.add(new Option(binding.label + " · " + binding.workspace, binding.id));
+  if (desktopDestinationID && !bindings.some(item => item.id === desktopDestinationID)) {
+    desktopDestinationEl.add(new Option("Disconnected conversation — reconnect in Codex", desktopDestinationID));
+  }
+  desktopDestinationEl.value = desktopDestinationID;
+  desktopDestinationEl.disabled = requestInFlight;
+  const destination = bindings.find(item=>item.id===desktopDestinationID);
+  document.getElementById("desktopDestinationHint").textContent = desktopDestinationID ? (destination?.automatic_delivery ? "Approved feedback sends automatically while your Codex connection is open." : "Feedback queues for this conversation. Enable automatic delivery in your Codex review connection to send without another click.") : "";
+}
+
+desktopDestinationEl?.addEventListener("change", async () => {
+  desktopDestinationID = desktopDestinationEl.value;
+  desktopRequestID = "";
+  await storageSet({desktopDestinationID});
+  renderDesktopDestination();
+  renderQueueIndicator();
+});
+
+document.getElementById("desktopReviewToggle").addEventListener("click", async () => {
+  if (requestInFlight || recordingKind) return;
+  setRequestInFlight(true);
+  try {
+    if (hasActiveReview()) await stopSession();
+    else {
+      const binding = currentSessionPayload?.desktop?.bindings?.find(item => item.id === desktopDestinationID);
+      if (!binding) throw Error("Reconnect this conversation before starting a review.");
+      await postJSON("/api/session/start", {target_window:binding.label});
+      await refreshSession(true);
+      setStatus("");
+    }
+  } catch (error) { setStatus(error.message,true); }
+  finally { setRequestInFlight(false); }
+});
 
 function clearPendingSnapshot() {
   pendingSnapshotBlob = null;
@@ -801,6 +904,7 @@ async function restorePendingSnapshotState() {
 
 async function refreshSession(preserveStatus = false) {
   if (!config.daemonToken) {
+    desktopConnectSetup.classList.remove("hidden");
     stopSessionRefreshTimer();
     currentSessionPayload = null;
     latestPreviewPayload = null;
@@ -808,7 +912,8 @@ async function refreshSession(preserveStatus = false) {
     clearPendingSnapshot();
     renderComposerControls();
     if (!preserveStatus) {
-      setStatus("Pair the extension from the popup first.", true);
+      desktopConnectSetup.open = true;
+      setStatus("");
     }
     renderPreviewSurface();
     return;
@@ -827,13 +932,16 @@ async function refreshSession(preserveStatus = false) {
     }
   } catch (err) {
     scheduleSessionRefresh(null, IDLE_SESSION_REFRESH_MS);
+    desktopConnectSetup.classList.remove("hidden");
+    document.getElementById("desktopReviewControls").classList.add("hidden");
     currentSessionPayload = null;
     resetPreviewDeliveryOptions();
     clearPendingSnapshot();
     renderComposerControls();
     renderQueueIndicator();
     if (!preserveStatus) {
-      setStatus("Daemon connection failed: " + err.message, true);
+      desktopConnectSetup.open = true;
+      setStatus("Knit is unreachable. Reopen your Codex feedback panel, select Connect browser, then paste its new code in Connect to Codex here.", true);
     }
   }
 }
@@ -970,13 +1078,18 @@ function normalizeCaptureError(err, kind) {
   const message = String(err?.message || "").trim();
   const lowered = message.toLowerCase();
   if (name === "NotAllowedError" || lowered.includes("permission dismissed") || lowered.includes("permission denied")) {
+    document.getElementById("microphoneSetup").classList.remove("hidden");
     if (kind === "video") {
       return "Tab or microphone access was dismissed. Try the video button again and allow access.";
     }
-    return "Microphone access was dismissed. Try the microphone button again and allow access.";
+    return "Microphone access is not available. Select Enable microphone to grant access in a separate tab, then return here and try recording again.";
   }
   return message || (kind === "video" ? "Video recording failed." : "Audio recording failed.");
 }
+
+document.getElementById("microphoneSetup").onclick = () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("microphone.html") });
+};
 
 function clearAudioNoteCapture() {
   stopStream(audioNoteStream);
@@ -1442,7 +1555,12 @@ async function submit() {
     }
     await ensureFeedbackPresent();
     await approveSession(true, "submit");
-    const data = await postJSON("/api/session/submit", {
+    let data;
+    if (desktopDestinationID) {
+      if (!desktopRequestID) desktopRequestID = crypto.randomUUID();
+      data = await postJSON("/api/desktop/submit", {binding_id:desktopDestinationID,request_id:desktopRequestID});
+      desktopRequestID = "";
+    } else data = await postJSON("/api/session/submit", {
       provider: "",
       omit_video_event_ids: previewDeliveryOptions.omitVideoEventIDs || []
     });
@@ -1459,7 +1577,9 @@ async function submit() {
     const executionMode = String(data?.execution_mode || "").trim();
     watchedSubmitAttemptID = attemptID;
     if (attemptID) ensureSubmitAttemptWatchTimer();
-    const message = executionMode === "mcp_worker"
+    const message = executionMode === "connected_session"
+      ? "Queued for your Codex panel. Open that panel to review and deliver."
+      : executionMode === "mcp_worker"
       ? `Queued for worker via ${provider}${attemptID ? ` (${attemptID})` : ""}.`
       : `Request queued via ${provider}${attemptID ? ` (${attemptID})` : ""}.`;
     setStatus("");

@@ -14,6 +14,8 @@ type Store interface {
 	SaveSubmission(sessionID, provider, runID, status, ref string, payload any) error
 	SaveOperatorState(state *operatorstate.State) error
 	LoadOperatorState() (*operatorstate.State, error)
+	LoadDesktopState() ([]byte, error)
+	SaveDesktopState([]byte) error
 	ListSessions() ([]*session.Session, error)
 	DeleteSessionByID(sessionID string) error
 	PurgeSessionsOlderThan(cutoff time.Time) (int64, error)

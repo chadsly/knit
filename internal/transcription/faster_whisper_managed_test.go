@@ -3,8 +3,10 @@ package transcription
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -131,5 +133,54 @@ func TestEnsureManagedFasterWhisperRuntimeBootstrapsVenvWhenMissing(t *testing.T
 	}
 	if !strings.Contains(joined, "pip install faster-whisper") {
 		t.Fatalf("expected faster-whisper install command in calls: %v", calls)
+	}
+	if !strings.Contains(joined, managedPyAVRequirement) || !strings.Contains(joined, managedWhisperProbe) {
+		t.Fatal("bootstrap must constrain and verify PyAV compatibility")
+	}
+}
+
+func TestManagedWhisperRepairsIncompatiblePyAV(t *testing.T) {
+	for _, autoInstall := range []bool{true, false} {
+		t.Run(fmt.Sprint(autoInstall), func(t *testing.T) {
+			p := NewManagedFasterWhisperProviderFromEnv()
+			p.RuntimeDir = t.TempDir()
+			p.AutoInstall = autoInstall
+			python := filepath.Join(p.RuntimeDir, "venv", "bin", "python")
+			if runtime.GOOS == "windows" {
+				python = filepath.Join(p.RuntimeDir, "venv", "Scripts", "python.exe")
+			}
+			if err := os.MkdirAll(filepath.Dir(python), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(python, []byte("fixture"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			checks, installs := 0, 0
+			p.execFn = func(_ context.Context, _ string, args []string, _ []string, _ string) ([]byte, error) {
+				if len(args) == 2 && args[0] == "-c" {
+					if args[1] != managedWhisperProbe {
+						t.Fatal("missing compatibility probe")
+					}
+					checks++
+					if checks == 1 {
+						return nil, errors.New("incompatible PyAV 19")
+					}
+				} else {
+					installs++
+					if !strings.Contains(strings.Join(args, " "), managedPyAVRequirement) {
+						t.Fatal("repair omitted PyAV constraint")
+					}
+				}
+				return nil, nil
+			}
+			err := ensureManagedFasterWhisperRuntime(context.Background(), p)
+			if autoInstall {
+				if err != nil || checks != 2 || installs != 1 {
+					t.Fatalf("repair: checks=%d installs=%d err=%v", checks, installs, err)
+				}
+			} else if err == nil || installs != 0 {
+				t.Fatal("auto-install disabled must not mutate dependencies")
+			}
+		})
 	}
 }

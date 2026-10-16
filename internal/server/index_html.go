@@ -1225,6 +1225,11 @@ const indexHTML = `<!doctype html>
           <div class="status-card"><strong>Queue</strong><div id="queueState" class="empty-tone">No queued submissions.</div></div>
           <div class="status-card"><strong>Current run</strong><div id="submitState" class="empty-tone">No active run.</div></div>
         </div>
+        <details class="console-card" style="margin-top:1rem;">
+          <summary>Connected Codex panels (preview)</summary>
+          <p class="helper">Text feedback waits for you to open its Codex panel and select Send to this conversation. Delivered does not mean completed.</p>
+          <div id="desktopConnections" aria-live="polite">No connected panels.</div>
+        </details>
         <div class="flow-stack" style="margin-top:1rem;">
           <details class="console-card" open>
             <summary>Live agent output</summary>
@@ -3057,6 +3062,48 @@ function renderOversizedVideoWarningActions(preview) {
   '</div>';
 }
 
+function renderDesktopConnections() {
+  const root = document.getElementById('desktopConnections');
+  if (!root) return;
+  root.replaceChildren();
+  const state = currentState?.desktop || {};
+  const bindings = Array.isArray(state.bindings) ? state.bindings : [];
+  if (state.error || !bindings.length) {
+    root.textContent = state.error || 'No connected panels. Open Knit browser feedback in Codex to connect one.';
+    return;
+  }
+  for (const binding of bindings) {
+    const card = document.createElement('article');
+    card.style.margin = '1rem 0';
+    const title = document.createElement('strong');
+    title.textContent = binding.label;
+    card.append(title);
+    const workspace = document.createElement('p');
+    workspace.className = 'helper';
+    workspace.textContent = binding.workspace;
+    card.append(workspace);
+    for (const delivery of (state.deliveries || []).filter(item => item.binding_id === binding.id).slice(-5).reverse()) {
+      const row = document.createElement('p');
+      row.id = 'desktop-delivery-' + delivery.id;
+      if (delivery.status === 'failed' || delivery.status === 'needs_attention') row.style.color = 'var(--danger)';
+      row.textContent = (delivery.summary || 'Browser feedback') + ' — ' + (delivery.status === 'queued' ? 'Waiting for Codex panel' : delivery.status.replaceAll('_', ' '));
+      if (delivery.result) {
+        const result = document.createElement('pre');
+        result.textContent = delivery.result;
+        row.append(result);
+      }
+      card.append(row);
+    }
+    root.append(card);
+  }
+  const selected = document.getElementById(location.hash.slice(1));
+  if (selected && root.contains(selected) && root.dataset.focused !== selected.id) {
+    root.closest('details').open = true;
+    selected.scrollIntoView({block:'center'});
+    root.dataset.focused = selected.id;
+  }
+}
+
 function renderSubmitAttempts() {
   const attempts = Array.isArray(currentState?.submit_attempts) ? currentState.submit_attempts : [];
   if (!attempts.length) {
@@ -4495,6 +4542,7 @@ async function refresh() {
     notifySubmitAttemptTransitions(Array.isArray(currentState?.submit_attempts) ? currentState.submit_attempts : []);
     notifySubmitRecoveryNotices(currentState?.submit_recovery_notices);
     renderSubmitAttempts();
+    renderDesktopConnections();
     renderSubmitControls();
     const locked = !!currentState.config_locked;
     configLockStatusEl.textContent = locked ? 'locked' : 'unlocked';

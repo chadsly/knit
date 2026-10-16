@@ -25,6 +25,7 @@ func (s *Server) handleMCPStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{
 		"daemon_ok":               true,
+		"desktop":                 s.desktopPublicState(),
 		"daemon_instance":         s.daemonInstanceState(),
 		"default_execution_mode":  s.defaultExecutionMode(),
 		"submit_execution_mode":   s.submitExecutionMode(),

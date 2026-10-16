@@ -18,6 +18,9 @@ const (
 	defaultManagedFasterWhisperModel       = "small"
 	defaultManagedFasterWhisperDevice      = "cpu"
 	defaultManagedFasterWhisperComputeType = "int8"
+	// faster-whisper 1.2.x uses metadata_errors, removed in PyAV 19.
+	managedPyAVRequirement = "av>=11,<19"
+	managedWhisperProbe    = "import faster_whisper, av; assert 11 <= int(av.__version__.split('.')[0]) < 19, 'incompatible PyAV; requires av>=11,<19'"
 )
 
 //go:embed assets/faster_whisper_stt.py
@@ -210,19 +213,19 @@ func ensureManagedFasterWhisperRuntime(ctx context.Context, p *ManagedFasterWhis
 		if _, err := p.execFn(ctx, venvPython, []string{"-m", "pip", "install", "--upgrade", "pip"}, os.Environ(), absRuntime); err != nil {
 			return fmt.Errorf("upgrade pip for managed faster-whisper runtime: %w", err)
 		}
-		if _, err := p.execFn(ctx, venvPython, []string{"-m", "pip", "install", "faster-whisper"}, os.Environ(), absRuntime); err != nil {
+		if _, err := p.execFn(ctx, venvPython, []string{"-m", "pip", "install", "faster-whisper", managedPyAVRequirement}, os.Environ(), absRuntime); err != nil {
 			return fmt.Errorf("install faster-whisper runtime dependency: %w", err)
 		}
 	}
 
-	if _, err := p.execFn(ctx, venvPython, []string{"-c", "import faster_whisper"}, os.Environ(), absRuntime); err != nil {
+	if _, err := p.execFn(ctx, venvPython, []string{"-c", managedWhisperProbe}, os.Environ(), absRuntime); err != nil {
 		if !p.AutoInstall {
 			return fmt.Errorf("managed faster-whisper dependency check failed and auto-install is disabled: %w", err)
 		}
-		if _, installErr := p.execFn(ctx, venvPython, []string{"-m", "pip", "install", "faster-whisper"}, os.Environ(), absRuntime); installErr != nil {
+		if _, installErr := p.execFn(ctx, venvPython, []string{"-m", "pip", "install", "faster-whisper", managedPyAVRequirement}, os.Environ(), absRuntime); installErr != nil {
 			return fmt.Errorf("repair/install faster-whisper dependency: %w", installErr)
 		}
-		if _, verifyErr := p.execFn(ctx, venvPython, []string{"-c", "import faster_whisper"}, os.Environ(), absRuntime); verifyErr != nil {
+		if _, verifyErr := p.execFn(ctx, venvPython, []string{"-c", managedWhisperProbe}, os.Environ(), absRuntime); verifyErr != nil {
 			return fmt.Errorf("verify faster-whisper dependency: %w", verifyErr)
 		}
 	}

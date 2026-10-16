@@ -159,6 +159,14 @@ func (s *bridgeWorkerSession) stop(client *daemonClient) {
 }
 
 func runMCPCommand(args []string) error {
+	if len(args) > 0 && args[0] == "--desktop" {
+		if len(args) != 1 {
+			return fmt.Errorf("usage: knit mcp --desktop")
+		}
+		if err := configureDesktopEnvironment(); err != nil {
+			return fmt.Errorf("desktop configuration: %w", err)
+		}
+	}
 	if len(args) > 0 && strings.TrimSpace(args[0]) == "token" {
 		return runMCPTokenCommand()
 	}
@@ -189,6 +197,7 @@ func runMCPCommand(args []string) error {
 		Logger:       slog.New(slog.NewTextHandler(ioDiscard{}, nil)),
 		Capabilities: &mcp.ServerCapabilities{},
 	})
+	addDesktopTools(server, client)
 
 	mcp.AddTool(server, &mcp.Tool{Name: "knit_status", Description: "Get Knit daemon, queue, worker, and extension setup diagnostics."},
 		func(ctx context.Context, req *mcp.CallToolRequest, input struct{}) (*mcp.CallToolResult, map[string]any, error) {

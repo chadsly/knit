@@ -2,6 +2,8 @@ module knit
 
 go 1.25.0
 
+toolchain go1.26.9
+
 require github.com/BurntSushi/toml v1.4.0
 
 require (
@@ -30,7 +32,7 @@ require (
 	github.com/zalando/go-keyring v0.2.6 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
 	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect

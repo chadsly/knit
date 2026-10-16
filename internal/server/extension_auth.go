@@ -50,6 +50,7 @@ type extensionPairingPublic struct {
 }
 
 type extensionSessionState struct {
+	Desktop         map[string]any           `json:"desktop,omitempty"`
 	Session         any                      `json:"session"`
 	DaemonInstance  any                      `json:"daemon_instance,omitempty"`
 	RuntimePlatform any                      `json:"runtime_platform"`
@@ -244,6 +245,7 @@ func (s *Server) extensionSessionPayload() extensionSessionState {
 	cfg := s.currentConfig()
 	runtimeCodex := s.runtimeAgentState()
 	return extensionSessionState{
+		Desktop:         s.desktopPublicState(),
 		Session:         s.sessions.Current(),
 		DaemonInstance:  s.daemonInstanceState(),
 		RuntimePlatform: platform.CurrentRuntimeGuide(),

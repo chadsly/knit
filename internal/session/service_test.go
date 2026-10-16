@@ -1,9 +1,38 @@
 package session
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
+
+func TestDurableReservationFailurePreservesApproval(t *testing.T) {
+	svc := NewService()
+	svc.Start("Shop", "https://example.com")
+	if _, err := svc.AddFeedback(FeedbackEvt{ID: "note", NormalizedText: "Fix spacing", RawTranscript: "Fix spacing"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Approve("Spacing"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ReserveApprovedPackageWith(func(*CanonicalPackage) error { return errors.New("disk full") }); err == nil {
+		t.Fatal("durability failure swallowed")
+	}
+	if _, err := svc.ApprovedPackage(); err != nil {
+		t.Fatal("approval lost after failed queue write", err)
+	}
+	if _, err := svc.ReserveApprovedPackageWith(func(pkg *CanonicalPackage) error {
+		if len(pkg.ChangeRequests) != 1 {
+			t.Fatal("missing approved input")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ApprovedPackage(); err == nil {
+		t.Fatal("successful queue did not consume approval")
+	}
+}
 
 func TestSessionLifecycleAndApproval(t *testing.T) {
 	svc := NewService()

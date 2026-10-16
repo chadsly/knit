@@ -26,9 +26,11 @@ jobs:
           sudo apt-get install -y libayatana-appindicator3-dev libgtk-3-dev
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26.9"
       - name: Run Go test suite
         run: go test ./...
+      - name: Test extension recovery and pilot packaging
+        run: node --test test/desktop-connect.test.cjs test/microphone-permission.test.cjs test/desktop-package.test.cjs
 
   workflow-reliability-gate:
     name: Workflow Reliability Gate
@@ -37,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26.9"
       - name: Run reliability gate
         run: ./scripts/reliability-gate.sh
 
@@ -50,7 +52,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26.9"
       - name: Run performance gate
         run: ./scripts/perf-gate.sh
       - name: Upload performance reports
@@ -67,7 +69,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26.9"
       - name: Derive build version
         id: vars
         shell: bash
@@ -95,7 +97,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26.9"
       - name: Generate SBOM
         run: ./scripts/generate-sbom.sh ./dist-ci/sbom.spdx.json
       - name: Upload SBOM
@@ -113,9 +115,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26.9"
+      - name: Install vulnerability scanner
+        # Type-checking the Linux tray requires its native headers.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libayatana-appindicator3-dev libgtk-3-dev
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       - name: Run dependency scan
         run: ./scripts/dependency-scan.sh ./dist-ci/dependency-scan.json
+      - name: Scan Windows dependency paths
+        run: GOOS=windows GOARCH=amd64 govulncheck ./...
       - name: Upload dependency scan report
         uses: actions/upload-artifact@v4
         with:
@@ -138,7 +148,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26.9"
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

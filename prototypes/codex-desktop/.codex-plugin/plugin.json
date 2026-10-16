@@ -1,0 +1,11 @@
+{
+  "name": "knit-desktop-probe",
+  "version": "0.0.4",
+  "description": "Check whether Knit can send feedback to this desktop conversation",
+  "mcpServers": "./.mcp.json",
+  "requires_local_executor": true,
+  "interface": {
+    "displayName": "Knit Desktop Probe",
+    "shortDescription": "Check the connection to this conversation"
+  }
+}

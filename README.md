@@ -449,6 +449,8 @@ test/                   release, packaging, and extension-oriented tests
 
 ## Roadmap
 
+Knit 1.0 targets a desktop plugin that connects browser feedback to an existing Codex conversation. The [development preview](plugins/knit-desktop/README.md) provides explicit conversation selection, durable queueing, automatic delivery while the persistent connection panel is open, capture retrieval, and result summaries. Local voice transcription and sampled-video review have worked in the installed host. For compiled packages without a source build, see [private-pilot installation](docs/PRIVATE_PILOT.md). Public distribution and fresh-machine onboarding remain release gates. See the [1.0 architecture and release criteria](docs/KNIT_1_0.md).
+
 Near-term areas worth pushing forward:
 
 - richer DOM evidence capture with the broswer to allow the coding agent information about timing and user steps

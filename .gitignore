@@ -31,6 +31,13 @@
 /internal/server/.lumobarkley/
 /internal/server/knit.db
 /internal/server/knit.toml
+/internal/app/.knit/
+/cmd/tray/test-tray-data/
+/test/.knit/
+/test/knit.toml
+
+# Local demonstration application, not part of the product release
+/demos/review-loop/
 
 # Coding agent stuff
 REQUIREMENTS.md

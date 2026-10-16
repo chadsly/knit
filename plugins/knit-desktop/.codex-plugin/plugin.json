@@ -1,0 +1,11 @@
+{
+  "name": "knit-desktop",
+  "version": "0.1.11",
+  "description": "Connect approved browser text feedback to this Codex conversation",
+  "mcpServers": "./.mcp.json",
+  "requires_local_executor": true,
+  "interface": {
+    "displayName": "Knit Browser Feedback Preview",
+    "shortDescription": "Review browser feedback in this conversation"
+  }
+}
